@@ -39,6 +39,7 @@ liboml2_la_SOURCES = \
 	filter/stddev_filter.c \
 	filter/sum_filter.c \
 	filter/delta_filter.c \
+	filter/loss_filter.c \
 	filter/first_filter.h \
 	filter/last_filter.h \
 	filter/average_filter.h \
@@ -46,6 +47,7 @@ liboml2_la_SOURCES = \
 	filter/stddev_filter.h \
 	filter/sum_filter.h \
 	filter/delta_filter.h \
+	filter/loss_filter.h \
 	$(oml2inc_HEADERS)
 
 liboml2_la_LIBADD = \

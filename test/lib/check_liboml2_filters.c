@@ -32,6 +32,7 @@
 #include "filter/stddev_filter.h"
 #include "filter/sum_filter.h"
 #include "filter/delta_filter.h"
+#include "filter/loss_filter.h"
 #include "oml2/oml_writer.h"
 #include "check_util.h"
 
@@ -41,6 +42,7 @@ typedef struct _omlHistFilterInstanceData HistInstanceData;
 typedef struct _omlStddevFilterInstanceData StddevInstanceData;
 typedef struct _omlSumFilterInstanceData SumInstanceData;
 typedef struct _omlDeltaFilterInstanceData DeltaInstanceData;
+typedef struct _omlLossFilterInstanceData LossInstanceData;
 
 
 /* Fixtures */
@@ -434,6 +436,72 @@ START_TEST (test_filter_delta_output)
 END_TEST
 
 /********************************************************************************/
+/*                         LOSS FILTER TESTS                                   */
+/********************************************************************************/
+
+START_TEST (test_filter_loss_create)
+{
+  /*
+   * Create a loss filter and check that it was correctly initialized.
+   */
+  OmlFilter* f = NULL;
+  LossInstanceData* data = NULL;
+
+  f = create_filter ("loss", "inst", OML_INT32_VALUE, 2);
+
+  fail_if (f == NULL, "Filter creation failed for `loss' filter");
+  fail_if (f->instance_data == NULL, "Filter instance data is NULL");
+
+  fail_unless (f->index == 2);
+  fail_unless (f->input_type == OML_INT32_VALUE);
+
+  data = (LossInstanceData*)f->instance_data;
+
+  // Sample count should be 0.
+  fail_unless (data->count == 0);
+  fail_unless (data->ooo_count == 0);
+  fail_unless (data->sample_count == 0);
+  fail_unless (data->last_seen == 0);
+  fail_unless (data->uninitialised == 1);
+
+  fail_unless (destroy_filter(f) == 0);
+}
+END_TEST
+
+START_TEST (test_filter_loss_output)
+{
+  /*
+   * Create a loss filter and check that it works properly
+   */
+  OmlFilter* f = NULL;
+  LossInstanceData* instdata = NULL;
+
+  f = create_filter ("loss", "inst", OML_INT32_VALUE, 2);
+
+  instdata = (LossInstanceData*)f->instance_data;
+
+  int32_t input [] = { 10, 11, 12, 14, 15, 13, 16, 17, 19, 20 };
+  int32_t output [] = { 2, 1, 10 };
+
+  TestVector** v_input = (TestVector**)malloc(1 * sizeof(TestVector));
+  TestVector** v_output = (TestVector**)malloc(1 * sizeof(TestVector));
+
+  v_input[0] = make_test_vector (input, OML_INT32_VALUE, 10);
+  v_output[0] = make_test_vector (output, OML_INT32_VALUE, 3);
+
+  TestData* data = (TestData*) malloc (sizeof(TestData));
+  data->count = 1;
+  data->inputs = v_input;
+  data->outputs = v_output;
+
+  run_filter_test (data, f);
+
+  fail_unless (destroy_filter(f) == 0);
+}
+END_TEST
+
+
+/********************************************************************************/
 /*                         MAIN TEST SUITE                                      */
 /********************************************************************************/
 
@@ -450,6 +518,7 @@ filters_suite (void)
   TCase* tc_filter_stddev = tcase_create ("FilterStddev");
   TCase* tc_filter_sum = tcase_create ("FilterSum");
   TCase* tc_filter_delta= tcase_create ("FilterDelta");
+  TCase* tc_filter_loss= tcase_create ("FilterLoss");
 
   /* Setup fixtures */
   tcase_add_checked_fixture (tc_filter,       filter_setup, filter_teardown);
@@ -459,6 +528,7 @@ filters_suite (void)
   tcase_add_checked_fixture (tc_filter_stddev,filter_setup, filter_teardown);
   tcase_add_checked_fixture (tc_filter_sum,filter_setup, filter_teardown);
   tcase_add_checked_fixture (tc_filter_delta,filter_setup, filter_teardown);
+  tcase_add_checked_fixture (tc_filter_loss,filter_setup, filter_teardown);
 
   /* Add tests to test case "FilterCore" */
   tcase_add_test (tc_filter, test_filter_create);
@@ -486,6 +556,10 @@ filters_suite (void)
   tcase_add_test (tc_filter_delta, test_filter_delta_create);
   tcase_add_test (tc_filter_delta, test_filter_delta_output);
 
+  /* Add tests to test case "FilterLoss" */
+  tcase_add_test (tc_filter_loss, test_filter_loss_create);
+  tcase_add_test (tc_filter_loss, test_filter_loss_output);
+
   /* Add the test cases to this test suite */
   suite_add_tcase (s, tc_filter);
   suite_add_tcase (s, tc_filter_avg);
@@ -494,6 +568,7 @@ filters_suite (void)
   suite_add_tcase (s, tc_filter_stddev);
   suite_add_tcase (s, tc_filter_sum);
   suite_add_tcase (s, tc_filter_delta);
+  suite_add_tcase (s, tc_filter_loss);
 
   return s;
 }
