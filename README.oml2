@@ -1,0 +1,43 @@
+OML2 Packaging for Android
+==========================
+
+This archive provides source code and Makefiles to build OML2.
+
+Getting the Android source
+--------------------------
+
+This distribution has been tested with CyanogenMod 9 [1]. It might or might not work
+with other Android distributions. Follow the instructions at [2] to obtain the
+source tree. 
+
+Preparing the source
+--------------------
+
+Extract this archive and copy its contents to the root of the CyanogenMod source
+tree.
+
+To enable building these new components, their name has to be added to
+PRODUCT_PACKAGES in target/product/core.mk:
+
+  PRODUCT_PACKAGES :=
+  ... \
+  liboml2
+
+Building the source
+-------------------
+
+From the root of the CyanogenMod source, type
+ $ . build/envsetup.sh 
+ $ brunch <YOUR-TARGET>
+This should create a CyanogenMod image for your device containing the OML2
+client library.
+
+Alternatively, you can build specific items using the `mmm` alias defined when
+sourcing `build/envsetup.sh`.
+ $ mmm external/liboml2
+
+References
+----------
+
+1. http://www.cyanogenmod.com/
+2. http://forum.xda-developers.com/showthread.php?t=1552090
