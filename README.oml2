@@ -21,6 +21,7 @@ PRODUCT_PACKAGES in target/product/core.mk:
 
   PRODUCT_PACKAGES :=
   ... \
+  libpopt \
   liboml2
 
 Building the source

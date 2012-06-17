@@ -1,0 +1,11 @@
+Popt Packaging for Android
+==========================
+
+This directory contains the source code for popt 1.16 [0], packaged for Android
+by François Hoguet at Nicta [1,2]. It is shipped alongside OML2 [3] as this is
+one of its dependencies, and is not currently part of the Android distribution.
+
+[0] http://freecode.com/projects/popt
+[1] http://ext.npc.nicta.com.au/projects/fhoguet
+[2] http://www.nicta.com.au
+[3] http://oml.mytestbed.net
