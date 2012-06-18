@@ -186,21 +186,23 @@ AC_CONFIG_FILES([Makefile
 		 ])
 AC_CONFIG_COMMANDS([issue610-exec], [chmod a+x test/server/issue610.rb])
 dnl Copy source files for the Gem in VPATH so rake is happy
-AC_CONFIG_COMMANDS([oml4r-vpath-copy], [test x$srcdir != x. && \
-		    mkdir -p ruby/oml4r/lib/oml4r && \
-		    for file in \
-			    ruby/oml4r/Rakefile \
-			    ruby/oml4r/lib/oml4r/oml4r-wlanconfig.rb \
-			    ruby/oml4r/lib/oml4r/oml4r-simple-example.rb \
-			    ruby/oml4r/README.md \
-			    ruby/oml4r/oml4r.gemspec \
-			    ruby/oml4r/LICENSE \
-			    ruby/oml4r/Gemfile \
-			    ruby/oml4r/.yardopts; do
-			cp -f $srcdir/${file} ./${file}; done
-		   ],[srcdir=$srcdir])
+AS_IF([test x$srcdir != x. && test x$have_bundler = xyes], 
+      [AC_CONFIG_COMMANDS([oml4r-vpath-copy],
+			  [mkdir -p ruby/oml4r/lib/oml4r && \
+			   for file in \
+				   ruby/oml4r/Rakefile \
+				   ruby/oml4r/lib/oml4r/oml4r-wlanconfig.rb \
+				   ruby/oml4r/lib/oml4r/oml4r-simple-example.rb \
+				   ruby/oml4r/README.md \
+				   ruby/oml4r/oml4r.gemspec \
+				   ruby/oml4r/LICENSE \
+				   ruby/oml4r/Gemfile \
+				   ruby/oml4r/.yardopts; do
+			  cp -f $srcdir/${file} ./${file}; done
+			  ],[srcdir=$srcdir])
+])
 dnl If the above command has copied files, let ruby/Makefile.am know that they have to be cleaned up
-AM_CONDITIONAL([CLEANUP_OML4R_GEM_SRC], [test x$srcdir != x.])
+AM_CONDITIONAL([CLEANUP_OML4R_GEM_SRC], [test x$srcdir != x. && test x$have_bundler = xyes])
 
 if test "x$missing_check" != "x"; then
    AC_MSG_WARN([could not find the `check' package, required
