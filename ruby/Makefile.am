@@ -40,7 +40,11 @@ share_DATA += oml4r/pkg/oml4r-$(PACKAGE_VERSION).gem \
 	      oml4r/lib/oml4r/oml4r-simple-example.rb \
 	      oml4r/lib/oml4r/oml4r-wlanconfig.rb
 
+gem: $(OML4R_GEM)
 $(OML4R_GEM):
+if CLEANUP_OML4R_GEM_SRC
+	cd $(top_builddir); ./config.status oml4r-vpath-copy
+endif
 	cd oml4r; $(RAKE) build
 
 oml4r-push: $(OML4R_GEM)
