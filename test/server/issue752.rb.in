@@ -1,0 +1,88 @@
+#!@RUBY@
+#
+# This little example triggers a bug in the OML server by sending an empy string 
+# as the last parameter
+#
+
+require "#{ENV['TOPBUILDDIR']}/ruby/oml4r/lib/oml4r.rb"
+require 'sqlite3'
+
+class Issue752MP < OML4R::MPBase
+  name :test
+  param :index, :type => :int32
+  param :label
+end
+
+def run
+  # Find a free port, just in case a legit oml2-server already runs on the
+  # machine
+
+  puts "Test case for Issue #752"
+
+  test_result = 0
+  for port in 3003..3013 do
+    begin 
+      # Test the port
+      server = TCPServer.new(port)
+      # If we reach below without exception, we're fine
+      confirmedPort = port
+      server.close
+
+    rescue Exception => ex
+      puts "Port #{port}: #{ex}"
+
+    end
+    break if confirmedPort != nil
+  end
+
+  if confirmedPort == nil
+    return 2
+
+  else
+    begin
+      File::unlink("issue752.sq3")
+    rescue Exception
+    end
+
+    puts "Using port #{confirmedPort}"
+    server = IO.popen("#{ENV['TOPBUILDDIR']}/server/oml2-server -D . -l #{confirmedPort}")
+    sleep 1
+
+    opts = { :appName => 'app', :expID => 'issue752', :nodeID => "id", :omlServer => "tcp:localhost:#{confirmedPort}" }
+    OML4R::init(ARGV, opts)
+    Issue752MP.inject 1, 'OK'
+    OML4R::close
+    OML4R::init(ARGV, opts)
+    Issue752MP.inject 2, ''
+    OML4R::close
+
+    sleep 2
+
+    Process.kill("TERM", server.pid)
+    server.readlines.each  { |line|
+      if line =~ /Data item mismatch for table/
+	puts "Issue #752 triggered: #{line}"
+	test_result = 1
+      end
+    }
+
+
+  end
+  
+  db = SQLite3::Database.new( "issue752.sq3" ) 
+  seq = nil
+  db.execute( "select oml_seq from app_test" ) { |row|
+    if seq.nil?
+      seq = row[0]
+    elsif seq >= row[0]
+      # The previous sequence number should be strictly smaller than this one
+      test_result = 1
+    end
+  }
+
+  exit test_result
+end
+
+if __FILE__ == $PROGRAM_NAME then run; end
+
+# vim: sw=2

@@ -6,8 +6,11 @@ if HAVE_RUBY_MIN_1_8_7
 TESTS += msggen.rb
 if HAVE_RUBY_MIN_1_9
 TESTS += issue610.rb
-endif
-endif
+endif # HAVE_RUBY_MIN_1_9
+if HAVE_GEM_SQLITE3
+TESTS += issue752.rb
+endif # HAVE_GEM_SQLITE3
+endif # HAVE_RUBY_MIN_1_8_7
 TESTS_ENVIRONMENT=TOPBUILDDIR=$(top_builddir)
 check_PROGRAMS = msgloop check_server
 
@@ -46,7 +49,7 @@ check_server_LDADD = @CHECK_LIBS@ -lsqlite3 \
 	$(top_builddir)/lib/shared/libshared.la \
 	$(top_builddir)/lib/ocomm/libocomm.la
 
-endif
+endif # HAVE_CHECK
 
 AM_CPPFLAGS = \
 	-I $(top_srcdir)/proxy_server \
@@ -57,10 +60,11 @@ AM_CPPFLAGS = \
 	-I  $(srcdir)/../system \
 	-DOML_TEST
 
-EXTRA_DIST = msggen.rb issue610.rb.in
+EXTRA_DIST = msggen.rb issue610.rb.in issue752.rb.in
 CLEANFILES = \
 	check_oml2.log \
 	dummy.bin \
 	log.txt \
 	text-test.sq3 \
-	issue610.sq3
+	issue610.sq3 \
+	issue752.sq3

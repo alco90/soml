@@ -172,6 +172,18 @@ AX_PROG_RUBY_VERSION([1.8.7],
 					    AC_MSG_WARN([The OML4r gem will not be built; you can run \`gem install bundler' and rerun configure to fix this issue])
 					   ]
 			   )
+		      AS_IF([test -n "$GEM" && ${GEM} list | grep -q "^sqlite3\s" ],[
+					    AC_MSG_CHECKING(whether the sqlite3 gem is available)
+					    have_sqlite3=yes
+					    AC_MSG_RESULT([${have_sqlite3}])
+					   ],
+					   [
+					    AC_MSG_CHECKING(whether the sqlite3 gem is available)
+					    have_sqlite3=no
+					    AC_MSG_RESULT([${have_sqlite3}])
+					    AC_MSG_WARN([Some test will not be run; you can run \`gem install sqlite3' and rerun configure to fix this issue])
+					   ]
+			   )
 		     ],
 		     [
 		      AC_MSG_WARN([No Ruby>=1.8.7 found; the OML4r gem will not be built, and some tests will be skipped])
@@ -182,6 +194,7 @@ AX_PROG_RUBY_VERSION([1.8.7],
 AM_CONDITIONAL([HAVE_RUBY_MIN_1_8_7], [test x"${missing_rubyge187}" != xyes])
 AM_CONDITIONAL([HAVE_RUBY_MIN_1_9], [test x"${missing_rubyge19}" != xyes])
 AM_CONDITIONAL([HAVE_GEM_BUNDLER], [test x$have_bundler = xyes])
+AM_CONDITIONAL([HAVE_GEM_SQLITE3], [test x$have_sqlite3 = xyes])
 
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h malloc.h netdb.h netinet/in.h stdlib.h string.h strings.h sys/ioctl.h sys/socket.h sys/time.h sys/timeb.h unistd.h])
@@ -242,9 +255,11 @@ AC_CONFIG_FILES([Makefile
 		 test/ruby/Makefile
 		 test/server/Makefile
 		 test/server/issue610.rb
+		 test/server/issue752.rb
 		 test/system/blob/Makefile
 		 ])
 AC_CONFIG_COMMANDS([issue610-exec], [chmod a+x test/server/issue610.rb])
+AC_CONFIG_COMMANDS([issue752-exec], [chmod a+x test/server/issue752.rb])
 dnl Copy source files for the Gem in VPATH so rake is happy
 AS_IF([test x$srcdir != x. && test x$have_bundler = xyes], 
       [AC_CONFIG_COMMANDS([oml4r-vpath-copy],
