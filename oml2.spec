@@ -1,14 +1,14 @@
 %define name            oml2
-%define version         2.8.0
+%define version         2.8.1
 
 BuildRoot:              %{_tmppath}/%{name}-%{version}-build
-Summary:                OML: The Orbit Measurement Library
+Summary:                OML: The OMF Measurement Library
 License:                MIT
 URL:                    http://oml.mytestbed.net
 Name:                   %{name}
 Version:                %{version}
 Release:                1
-Source:			http://mytestbed.net/attachments/download/709/oml2-%{version}.tar.gz
+Source:			http://mytestbed.net/attachments/download/727/oml2-%{version}.tar.gz
 Packager:               Christoph Dwertmann <christoph.dwertmann@nicta.com.au>
 Prefix:                 /usr
 Group:                  System/Libraries
@@ -56,7 +56,7 @@ rm -rf %{buildroot}
 /usr/lib/liboml2.a
 /usr/lib/liboml2.la
 /usr/lib/liboml2.so.0
-/usr/lib/liboml2.so.0.8.0
+/usr/lib/liboml2.so.0.8.1
 /usr/share/oml2/oml2-server-hook.sh
 /usr/share/info/oml-user-manual.info.gz
 %doc /usr/share/man/man1/liboml2.1.gz
