@@ -1,3 +1,7 @@
+# we are not building the ruby gem, because the rubygems package is missing from a few RPM distros (CentOS, Redhat)
+# on a machine that has rubygems installed the gem will be built, and RPM will complain about unpackaged files
+# ignore that, it will build on the SuSE platform
+
 %define name            oml2
 %define version         2.8.1
 
