@@ -2,7 +2,14 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([oml2],[2.9.pre0],[oml-user@lists.nicta.com.au])
+# Extract version infromation from Git
+dnl m4_define([version], m4_esyscmd([build-aux/git-version-gen .tarball-version]))
+dnl m4_bmatch(m4_defn([version]), [^[0-9]], [], [m4_define([version], [2.9.pre0])])
+dnl AC_INIT([oml2],[m4_defn([version])],[oml-user@lists.nicta.com.au])
+AC_INIT([oml2],
+	m4_esyscmd([build-aux/git-version-gen .tarball-version]),
+	[oml-user@lists.nicta.com.au])
+AC_CONFIG_AUX_DIR([build-aux])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_HEADERS([config.h])
@@ -69,9 +76,12 @@ AS_IF([test x$with_macosx != xno -a $host_vendor = apple],
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_CC
+gl_EARLY
 AM_PROG_CC_C_O
 AC_PROG_INSTALL
 AC_PROG_MAKE_SET
+
+gl_INIT
 
 missing_check=""
 PKG_CHECK_MODULES([CHECK], [check >= 0.9.4], [], [missing_check="yes"])
@@ -84,6 +94,7 @@ AC_SUBST([OML_VER_MAJOR], [`echo "$PACKAGE_VERSION" | awk -F. '{print $1}'`])
 AC_SUBST([OML_VER_MINOR], [`echo "$PACKAGE_VERSION" | awk -F. '{print $2}'`])
 AC_SUBST([OML_VER_PATCH], [`echo "$PACKAGE_VERSION" | awk -F. '{print $3}'`])
 AC_SUBST([OML_VER_PATCH_LT], [`echo "$PACKAGE_VERSION" | awk -F. '{print $3}' | sed -ne 's/[[^0-9]]*\([[0-9]]*\)/\1/p'`])
+AC_SUBST([RUBYGEM_VERSION], [`echo "$PACKAGE_VERSION" | sed s/-//g`])
 
 AC_SUBST([pkglocalstatedir], [${localstatedir}/${PACKAGE}])
 
