@@ -47,6 +47,14 @@ include doxygen.am
 
 if DX_COND_doc
 all: doxygen-doc
+install-hook: install-doxygen
+uninstall-hook: uninstall-doxygen
+
+install-doxygen: doxygen/oml2.tag
+	cp -r doxygen/html $(htmldir)/doxygen
+
+uninstall-doxygen:
+	rm -rf $(htmldir)/doxygen
 endif
 
 A2X_ARGS = \
