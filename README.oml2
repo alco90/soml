@@ -1,7 +1,9 @@
 OML2 Packaging for Android
 ==========================
 
-This archive provides source code and Makefiles to build OML2.
+This archive provides source code and Makefiles to build OML2 and the proxy
+server for Android. It also contains some dependencies which were found not to
+be available by default on Android (popt).
 
 Getting the Android source
 --------------------------
@@ -22,7 +24,8 @@ PRODUCT_PACKAGES in target/product/core.mk:
   PRODUCT_PACKAGES :=
   ... \
   libpopt \
-  liboml2
+  liboml2 \
+  oml2-proxy-server
 
 Building the source
 -------------------
@@ -31,7 +34,7 @@ From the root of the CyanogenMod source, type
  $ . build/envsetup.sh 
  $ brunch <YOUR-TARGET>
 This should create a CyanogenMod image for your device containing the OML2
-client library.
+client library as well as the oml2-proxy-server.
 
 Alternatively, you can build specific items using the `mmm` alias defined when
 sourcing `build/envsetup.sh`.
