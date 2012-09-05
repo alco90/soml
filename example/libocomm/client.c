@@ -32,17 +32,20 @@
 #include <sys/errno.h>
 #include <assert.h>
 
-#include "ocomm/o_log.h"
-#include "ocomm/o_socket.h"
+#include <ocomm/o_log.h>
+#include <ocomm/o_socket.h>
+#include <ocomm/o_eventloop.h>
 
+// Network information
+#define DEFAULT_PORT 9008
+#define ADDR_LENGTH 256 /* RFC 1035, sec. 2.3.4, Size limits: “names  255 octets or less” */
  //************************
-static int port;
-static char* addr;
+static int port = DEFAULT_PORT;
+static char addr[ADDR_LENGTH];
 
 #define DEFAULT_LOG_FILE "client.log"
 static int log_level = O_LOG_INFO;
 static char* logfile_name = DEFAULT_LOG_FILE;
-static FILE* logfile;
 
 
 struct poptOption options[] = {
@@ -67,13 +70,12 @@ void
 server_callback(
   Socket* source,
   void* handle,
-  void* buf,
+  void* b,
   int buf_size
 ) {
-
-  char* addr = buf;
-  o_log(O_LOG_INFO, "reply: <%s>\n", addr);
-  printf("reply: %s\n", addr);
+  char* buf = (char*)b;
+  o_log(O_LOG_INFO, "reply: <%s>\n", buf);
+  printf("reply: %s\n", buf);
 }
 
 static void
@@ -131,10 +133,14 @@ main(
 ) {
   int c;
 
+  *addr = 0;
+  strncpy(addr, "localhost", ADDR_LENGTH);
+
   poptContext optCon = poptGetContext(NULL, argc, argv, options, 0);
   poptSetOtherOptionHelp(optCon, "configFile");
   poptGetNextOpt(optCon);
 
+  while ((c = poptGetNextOpt(optCon)) >= 0);
   o_set_log_file(logfile_name);
   o_set_log_level(log_level);
   setlinebuf(stdout);
@@ -147,12 +153,12 @@ main(
     return -1;
   }
 
-  eventloop_init(10);
+  eventloop_init();
 
   Socket* sock = socket_tcp_out_new("out", addr, port);
-  eventloop_on_read_in_channel(sock, server_callback, NULL);
+  eventloop_on_read_in_channel(sock, (o_el_read_socket_callback)server_callback, NULL, NULL);
 
-  eventloop_on_stdin(stdin_callback, sock);
+  eventloop_on_stdin((o_el_read_socket_callback)stdin_callback, sock);
   eventloop_run();
   return(0);
 }

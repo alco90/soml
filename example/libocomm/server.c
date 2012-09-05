@@ -26,10 +26,12 @@
 
 #include <popt.h>
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
-#include "ocomm/o_log.h"
-#include "ocomm/o_socket.h"
-#include "ocomm/o_eventloop.h"
+#include <ocomm/o_log.h>
+#include <ocomm/o_socket.h>
+#include <ocomm/o_eventloop.h>
 
 // Network information
 #define DEFAULT_PORT 9008
@@ -40,7 +42,6 @@ static int port = DEFAULT_PORT;
 #define DEFAULT_LOG_FILE "server.log"
 static int log_level = O_LOG_INFO;
 static char* logfile_name = DEFAULT_LOG_FILE;
-static FILE* logfile;
 
 //extern int o_log_level;
 
@@ -69,7 +70,8 @@ on_client(
 	char* reply = b;
 	int len;
 
-	sprintf(reply, "ECHO: %s", buf);
+        printf("message: %s\n", (char*)buf);
+	sprintf(reply, "ECHO: %s", (char*)buf);
 	len = strlen(reply);
 
   o_log(O_LOG_DEBUG, "sending reply(%d): <%s>\n", len, reply);
@@ -134,11 +136,14 @@ main(
 ) {
 	process_args(argc, argv);
 
-  eventloop_init(10);
+  eventloop_init();
 
   Socket* serverSock = socket_server_new("server", port, on_connect, NULL);
 
   eventloop_run();
+
+  socket_free(serverSock);
+
   return(0);
 }
 

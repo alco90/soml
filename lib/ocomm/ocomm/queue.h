@@ -178,7 +178,7 @@ oqueue_remove_string(
 int
 oqueue_remove_ptr(
   OQueue* queue,
-  void*     value
+  void**  value
 );
 
 /*! Remove an integer

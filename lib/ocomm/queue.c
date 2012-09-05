@@ -61,14 +61,11 @@ typedef struct _queue {
 } OQueueInt;
 
 
-static int add_data(OQueue* queue, void* data, int len, char type);
-static char* remove_data(OQueue* queue, char type);
-
 /** Create a new OQueue.
  *
  * \param name name of the queue (used for debugging)
  * \param max_size max number of items allowed in the queue
- * \param step max space per item to reserve
+ * \param step max space per item to reserve (e.g., the maximum length of a storable string)
  * \return the newly created OQueue
  */
 OQueue*
@@ -121,6 +118,9 @@ oqueue_clear(
   self->size = 0;
 }
 
+/* Declared further down, but used by add_data here */
+static void* remove_data(OQueue* queue, char type);
+
 /** Enqueue an object into an OQueue.
  *
  * Note, this just stores a pointer to the object.
@@ -140,8 +140,6 @@ add_data(
 ) {
   OQueueInt* self = (OQueueInt*)queue;
 
-  o_log(O_LOG_DEBUG4, "%s: Adding %p (len %d) of type %d\n",
-      queue->name, data, len, type);
   if (self->size >= self->max_size) {
     switch (self->mode) {
     case BLOCK_ON_FULL: return 0;
@@ -159,6 +157,8 @@ add_data(
     }
   }
 
+  o_log(O_LOG_DEBUG4, "%s: Adding %p (len %d) of type %d at %p\n",
+      queue->name, data, len, type, self->tail+1);
   *self->tail = type;
   memcpy(self->tail + 1, data, len);
   self->tail += self->step;
@@ -180,7 +180,7 @@ oqueue_add_ptr(
   OQueue* queue,
   void*   obj
 ) {
-  return add_data(queue, obj, sizeof(void*), OQUEUE_PTR_T);
+  return add_data(queue, &obj, sizeof(void*), OQUEUE_PTR_T);
 }
 
 /** Add an integer to the OQueue.
@@ -268,13 +268,13 @@ oqueue_add_string(
  * \param type either OQUEUE_DONT_CARE_T or the expected type of the data to enqueue
  * \return a pointer to the data stored or NULL if queue is empty or the type doesn't match
  */
-static char*
+static void*
 remove_data(
   OQueue* queue,
   char    type
 ) {
   OQueueInt* self = (OQueueInt*)queue;
-  char* item = NULL;
+  void* item = NULL;
 
   if (self->size <= 0) return NULL;
 
@@ -288,6 +288,7 @@ remove_data(
   if (self->head >= self->queue + self->qlength) self->head = self->queue;
   self->size--;
 
+  o_log(O_LOG_DEBUG4, "%s: Removed %p of type %d\n",
       queue->name, item, type);
 
   return item;
@@ -303,12 +304,12 @@ remove_data(
 int
 oqueue_remove_ptr(
   OQueue* queue,
-  void*     value
+  void**  value
 ) {
-  char* ptr = remove_data(queue, OQUEUE_PTR_T);
+  void* ptr = remove_data(queue, OQUEUE_PTR_T);
 
   if (ptr == NULL) return 0;
-  value = (void*)ptr;
+  *value = *((void**)ptr);
   return 1;
 }
 
@@ -324,7 +325,7 @@ oqueue_remove_int(
   OQueue* queue,
   int*     value
 ) {
-  char* ptr = remove_data(queue, OQUEUE_INT_T);
+  void* ptr = remove_data(queue, OQUEUE_INT_T);
 
   if (ptr == NULL) return 0;
   *value = *((int*)ptr);
@@ -343,7 +344,7 @@ oqueue_remove_long(
   OQueue* queue,
   long*   value
 ) {
-  char* ptr = remove_data(queue, OQUEUE_LONG_T);
+  void* ptr = remove_data(queue, OQUEUE_LONG_T);
 
   if (ptr == NULL) return 0;
   *value = *((long*)ptr);
@@ -362,7 +363,7 @@ oqueue_remove_float(
   OQueue* queue,
   float*  value
 ) {
-  char* ptr = remove_data(queue, OQUEUE_FLOAT_T);
+  void* ptr = remove_data(queue, OQUEUE_FLOAT_T);
 
   if (ptr == NULL) return 0;
   *value = *((float*)ptr);
@@ -381,7 +382,7 @@ oqueue_remove_double(
   OQueue* queue,
   double*     value
 ) {
-  char* ptr = remove_data(queue, OQUEUE_DOUBLE_T);
+  void* ptr = remove_data(queue, OQUEUE_DOUBLE_T);
 
   if (ptr == NULL) return 0;
   *value = *((double*)ptr);
@@ -400,7 +401,7 @@ oqueue_remove_string(
   OQueue* queue,
   char**   value
 ) {
-  char* ptr = remove_data(queue, OQUEUE_STRING_T);
+  void* ptr = remove_data(queue, OQUEUE_STRING_T);
 
   if (ptr == NULL) return 0;
   *value = ptr;

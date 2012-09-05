@@ -22,6 +22,7 @@ config.status
 Makefile.in
 Makefile
 !example/liboml2/Makefile
+t!example/libocomm/Makefile
 aclocal.m4
 config.h.in
 config.guess
