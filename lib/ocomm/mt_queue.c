@@ -20,9 +20,9 @@
  * THE SOFTWARE.
  *
  */
-/*!\file queue.c
-  \brief This file implements a FIFO queue.
-*/
+/**
+ * This file implements a thread-safe OQueues.
+ */
 
 #include "ocomm/mt_queue.h"
 #include "ocomm/queue.h"
@@ -34,27 +34,31 @@
 #include <errno.h>
 
 
-//! Data-structure, to store object state
+/* Queue data-structure, to store object state */
 typedef struct _mt_queue {
 
-  //! Name used for debugging
-  char* name;
+  char* name;       /* Name, used for debugging */
 
-  OQueue* queue;
+  OQueue* queue;    /* OQueue use for actual storage */
 
   pthread_mutex_t mutex;
   pthread_cond_t  writeCondVar;
   pthread_cond_t  readCondVar;
 
 
-  //! Local memory for debug name
-  char nameBuf[64];
+  char nameBuf[64]; /* Local memory for debug name */
 
 } MTQueueInt;
 
 static int lock(MTQueueInt* self);
 static void unlock(MTQueueInt* self);
 
+/** Create a new MTQueue.
+ *
+ * \param name name of the queue (used for debugging)
+ * \param length max number of items allowed in queue
+ * \return the newly created MTQueue
+ */
 MTQueue*
 mt_queue_new(
   char* name,
@@ -75,6 +79,10 @@ mt_queue_new(
   return (MTQueue*)self;
 }
 
+/** Delete an MTQueue.
+ *
+ * \param queue MTQueue to delete
+ */
 void
 mt_queue_delete(
   MTQueue* queue
@@ -89,9 +97,13 @@ mt_queue_delete(
 }
 
 
-/*! Enquee an object on queue
+/** Enqueue an object into an MTQueue.
  *
- * Return true(1) on success, false(0) otherwise.
+ * Note, this just stores a pointer to the object.
+ *
+ * \param queue MTQueue where the string should be added
+ * \param obj pointer to the data buffer to enqueue
+ * \return 1 on success, 0 otherwise
  */
 int
 mt_queue_add(
@@ -108,16 +120,23 @@ mt_queue_add(
   unlock(self);
 
   if (pthread_cond_signal(&self->readCondVar)) {
-    o_log(O_LOG_WARN, "%s: Couldn't signal read condVar (%s)\n",
+    o_log(O_LOG_WARN, "%s: Couldn't signal read condVar: %s\n",
 	  self->name, strerror(errno));
     return 0;
   }
   return 1;
 }
 
-/*! Remove the oldest object from queue.
+/** Remove the oldest object from MTQueue and return a pointer to it.
  *
- * Return object or NULL if queue is empty
+ * Note, that this returns a pointer to the data stored
+ * in the OQueue's internal storage. It is the receiver's
+ * responsibility to copy it to other storage if the value
+ * needs to be maintained (in other words, subsequent adds
+ * to the OQueue may override the returned value.
+ *
+ * \param queue MTQueue where the string should be added
+ * \return a pointer to the data stored or NULL if queue is empty or the type doesn't match
  */
 void*
 mt_queue_remove(
@@ -134,7 +153,7 @@ mt_queue_remove(
   unlock(self);
 
   if (pthread_cond_signal(&self->writeCondVar)) {
-    o_log(O_LOG_WARN, "%s: Couldn't signal write condVar (%s)\n",
+    o_log(O_LOG_WARN, "%s: Couldn't signal write condVar: %s\n",
 	  self->name, strerror(errno));
     return 0;
   }
@@ -142,9 +161,10 @@ mt_queue_remove(
 }
 
 
-/*! Return oldest object without removing from queue.
+/** Return the oldest object of the OQueue without removing it.
  *
- * Return object or NULL if queue is empty
+ * \param queue OQueue in which to peek
+ * \return object or NULL if queue is empty
  */
 void*
 mt_queue_peek(
@@ -160,9 +180,10 @@ mt_queue_peek(
 }
 
 
-/*! Check if there is still room in the queue
+/** Check if there is still room in the MTQueue.
  *
- * Return true(1) if room, false(0) otherwise.
+ * \param queue MTQueue to check
+ * \return 1 if empty, 0 otherwise
  */
 int
 mt_queue_can_add(
@@ -177,9 +198,10 @@ mt_queue_can_add(
   return res;
 }
 
-/*! Check if queue is empty
- *
- * Return true(1) if empty, false(0) otherwise.
+/*. Check if MTQueue is empty.
+ * 
+ * \param queue MTQueue to check
+ * \return 1 if empty, 0 otherwise
  */
 int
 mt_queue_is_empty(
@@ -194,19 +216,19 @@ mt_queue_is_empty(
   return res;
 }
 
-int
+static int
 lock(
   MTQueueInt* self
 ) {
   if (pthread_mutex_lock(&self->mutex)) {
-    o_log(O_LOG_WARN, "%s: Couldn't get mutex lock (%s)\n",
+    o_log(O_LOG_WARN, "%s: Couldn't get mutex lock: %s\n",
 	  self->name, strerror(errno));
     return 0;
   }
   return 1;
 }
 
-void
+static void
 unlock(
   MTQueueInt* self
 ) {

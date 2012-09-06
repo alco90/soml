@@ -20,9 +20,9 @@
  * THE SOFTWARE.
  *
  */
-/*!\file queue.c
-  \brief This file implements a FIFO queue.
-*/
+/**
+ * This file implements a FIFO queue as a circular buffer of fixed size.
+ */
 
 #include "ocomm/queue.h"
 #include "ocomm/o_log.h"
@@ -39,33 +39,38 @@
 #define OQUEUE_STRING_T 0x06
 
 
-//! Data-structure, to store object state
+/* Queue data-structure, to store object state */
 typedef struct _queue {
 
-  //! Name used for debugging
-  char* name;
+  char* name;       /* Name, used for debugging */
 
-  int    size;     //! Number of items in queue
-  int    max_size;     //! Max number of items allowed in queue
+  int    size;      /* Number of items in queue */
+  int    max_size;  /* Max number of items allowed in queue */
 
-  OQueueMode mode;  //! Mode to deal with full queue behavior
+  OQueueMode mode;  /* Mode to deal with full queue behavior */
 
-  int    step;     //! Max space per queue item to reserve
+  int    step;      /* Max space per queue item to reserve */
 
   int    qlength;
   char*  queue;
   char*  head;
   char*  tail;
 
-  //! Local memory for debug name
-  char nameBuf[64];
+  char nameBuf[64]; /* Local memory for debug name */
 
 } OQueueInt;
 
 
-static int add_dats(OQueue* queue, void* data, int len, char type);
+static int add_data(OQueue* queue, void* data, int len, char type);
 static char* remove_data(OQueue* queue, char type);
 
+/** Create a new OQueue.
+ *
+ * \param name name of the queue (used for debugging)
+ * \param max_size max number of items allowed in the queue
+ * \param step max space per item to reserve
+ * \return the newly created OQueue
+ */
 OQueue*
 oqueue_new(
   char* name,
@@ -89,6 +94,10 @@ oqueue_new(
   return (OQueue*)self;
 }
 
+/** Delete an OQueue.
+ *
+ * \param queue OQueue to delete
+ */
 void
 oqueue_delete(
   OQueue* queue
@@ -99,6 +108,10 @@ oqueue_delete(
   free(self);
 }
 
+/** Clear an OQueue.
+ *
+ * \param queue OQueue to clear
+ */
 void
 oqueue_clear(
   OQueue* queue
@@ -108,19 +121,18 @@ oqueue_clear(
   self->size = 0;
 }
 
-/*! Enquee an object on queue.
+/** Enqueue an object into an OQueue.
  *
- * Note, this just stores a reference to the object.
+ * Note, this just stores a pointer to the object.
  *
- * Return true(1) on success, false(0) otherwise.
- */
-
-/*! Enquee an object on queue
- *
- * Return true(1) on success, false(0) otherwise.
+ * \param queue OQueue where the string should be added
+ * \param data pointer to the data buffer to enqueue
+ * \param len size of the data to enqueue
+ * \param type type of the data to enqueue
+ * \return 1 on success, 0 otherwise
  */
 static int
-add_dats(
+add_data(
   OQueue* queue,
   void*   data,
   int     len,
@@ -128,6 +140,8 @@ add_dats(
 ) {
   OQueueInt* self = (OQueueInt*)queue;
 
+  o_log(O_LOG_DEBUG4, "%s: Adding %p (len %d) of type %d\n",
+      queue->name, data, len, type);
   if (self->size >= self->max_size) {
     switch (self->mode) {
     case BLOCK_ON_FULL: return 0;
@@ -138,7 +152,8 @@ add_dats(
       break;
     }
     default: {
-      o_log(O_LOG_ERROR, "Missing implementation for queue mode.");
+      o_log(O_LOG_ERROR, "%s: Missing implementation for queue mode %d\n",
+          queue->name, self->mode);
       return 0;
     }
     }
@@ -154,64 +169,104 @@ add_dats(
   return 1;
 }
 
+/** Add a pointer to the OQueue.
+ *
+ * \param queue OQueue where the string should be added
+ * \param obj pointer to add to the queue
+ * \return 1 on success, 0 otherwise
+ */
 int
 oqueue_add_ptr(
   OQueue* queue,
   void*   obj
 ) {
-  return add_dats(queue, obj, sizeof(void*), OQUEUE_PTR_T);
+  return add_data(queue, obj, sizeof(void*), OQUEUE_PTR_T);
 }
 
+/** Add an integer to the OQueue.
+ *
+ * \param queue OQueue where the string should be added
+ * \param value integer to add to the queue
+ * \return 1 on success, 0 otherwise
+ */
 int
 oqueue_add_int(
   OQueue* queue,
   int     value
 ) {
-  return add_dats(queue, &value, sizeof(int), OQUEUE_INT_T);
+  return add_data(queue, &value, sizeof(int), OQUEUE_INT_T);
 }
 
+/** Add a long to the queue.
+ *
+ * \param queue OQueue where the string should be added
+ * \param value long to add to the queue
+ * \return 1 on success, 0 otherwise
+ */
 int
 oqueue_add_long(
   OQueue* queue,
   long    value
 ) {
-  return add_dats(queue, &value, sizeof(long), OQUEUE_LONG_T);
+  return add_data(queue, &value, sizeof(long), OQUEUE_LONG_T);
 }
 
+/** Add a float to the OQueue.
+ *
+ * \param queue OQueue where the string should be added
+ * \param value float to add to the queue
+ * \return 1 on success, 0 otherwise
+ */
 int
 oqueue_add_float(
   OQueue* queue,
   float   value
 ) {
-  return add_dats(queue, &value, sizeof(float), OQUEUE_FLOAT_T);
+  return add_data(queue, &value, sizeof(float), OQUEUE_FLOAT_T);
 }
 
+/** Add a double to the OQueue.
+ *
+ * \param queue OQueue where the string should be added
+ * \param value double to add to the queue
+ * \return 1 on success, 0 otherwise
+ */
 int
 oqueue_add_double(
   OQueue* queue,
   double  value
 ) {
-  return add_dats(queue, &value, sizeof(double), OQUEUE_DOUBLE_T);
+  return add_data(queue, &value, sizeof(double), OQUEUE_DOUBLE_T);
 }
 
+
+/** Add a string to the OQueue.
+ *
+ * Note, this just stores a pointer to the string.
+ *
+ * \param queue OQueue where the string should be added
+ * \param string pointer to the first character of the C-string (normal char*)
+ * \return 1 on success, 0 otherwise
+ */
 int
 oqueue_add_string(
   OQueue* queue,
   char*   string
 ) {
-  return add_dats(queue, string, strlen(string), OQUEUE_STRING_T);
+  return add_data(queue, string, strlen(string), OQUEUE_STRING_T);
 }
 
-/*! Remove the oldest object from queue and return a reference to
- * it.
+/** Remove the oldest object from OQueue and return a pointer to it.
  *
  * Note, that this returns a pointer to the data stored
- * in the queue's internal storage. It is the receiver's
+ * in the OQueue's internal storage. It is the receiver's
  * responsibility to copy it to other storage if the value
  * needs to be maintained (in other words, subsequent adds
- * to the queue may override the returned value.
+ * to the OQueue may override the returned value.
  *
- * Return reference to data store or NULL if queue is empty
+ * \param queue OQueue where the string should be added
+ * \param type either OQUEUE_DONT_CARE_T or the expected type of the data to enqueue
+ * \return a pointer to the data stored or NULL if queue is empty or the type doesn't match
  */
 static char*
 remove_data(
@@ -224,7 +279,7 @@ remove_data(
   if (self->size <= 0) return NULL;
 
   if (type != OQUEUE_DONT_CARE_T && *(self->head) != type) {
-    o_log(O_LOG_WARN, "Trying to read wrong type from queue '%s'\n",
+    o_log(O_LOG_WARN, "%s: Trying to read wrong type from queue\n",
 	  self->name);
     return NULL;
   }
@@ -233,9 +288,18 @@ remove_data(
   if (self->head >= self->queue + self->qlength) self->head = self->queue;
   self->size--;
 
+      queue->name, item, type);
+
   return item;
 }
 
+/** Remove the oldest object as a pointer from OQueue and update a reference to
+ * it.
+ *
+ * \param queue OQueue from which to remove the pointer
+ * \param value reference to the variable where the stored pointer should be written
+ * \return 1 on success, 0 otherwise
+ */
 int
 oqueue_remove_ptr(
   OQueue* queue,
@@ -248,6 +312,13 @@ oqueue_remove_ptr(
   return 1;
 }
 
+/** Remove the oldest object as an integer from OQueue and update a reference to
+ * it.
+ *
+ * \param queue OQueue from which to remove the integer
+ * \param value reference to the variable where the stored integer should be written
+ * \return 1 on success, 0 otherwise
+ */
 int
 oqueue_remove_int(
   OQueue* queue,
@@ -260,6 +331,13 @@ oqueue_remove_int(
   return 1;
 }
 
+/** Remove the oldest object as a long from OQueue and update a reference to
+ * it.
+ *
+ * \param queue OQueue from which to remove the long
+ * \param value reference to the variable where the stored long should be written
+ * \return 1 on success, 0 otherwise
+ */
 int
 oqueue_remove_long(
   OQueue* queue,
@@ -272,6 +350,13 @@ oqueue_remove_long(
   return 1;
 }
 
+/** Remove the oldest object as a float from OQueue and update a reference to
+ * it.
+ *
+ * \param queue OQueue from which to remove the float
+ * \param value reference to the variable where the stored float should be written
+ * \return 1 on success, 0 otherwise
+ */
 int
 oqueue_remove_float(
   OQueue* queue,
@@ -284,6 +369,13 @@ oqueue_remove_float(
   return 1;
 }
 
+/** Remove the oldest object as a double from OQueue and update a reference to
+ * it.
+ *
+ * \param queue OQueue from which to remove the double
+ * \param value reference to the variable where the stored double should be written
+ * \return 1 on success, 0 otherwise
+ */
 int
 oqueue_remove_double(
   OQueue* queue,
@@ -296,6 +388,13 @@ oqueue_remove_double(
   return 1;
 }
 
+/** Remove the oldest object as a string from OQueue and update a reference to
+ * it.
+ *
+ * \param queue OQueue from which to remove the string
+ * \param value reference to the variable where the stored string should be written
+ * \return 1 on success, 0 otherwise
+ */
 int
 oqueue_remove_string(
   OQueue* queue,
@@ -309,9 +408,10 @@ oqueue_remove_string(
   //  return remove_data(queue, (void**)value, OQUEUE_STRING_T);
 }
 
-/*! Return oldest object without removing from queue.
+/** Return the oldest object of the OQueue without removing it.
  *
- * Return object or NULL if queue is empty
+ * \param queue OQueue in which to peek
+ * \return object or NULL if queue is empty
  */
 void*
 oqueue_peek(
@@ -324,9 +424,10 @@ oqueue_peek(
   return self->tail + 1;
 }
 
-/*! Check if there is still room in the queue
+/** Check if there is still room in the OQueue.
  *
- * Return true(1) if room, false(0) otherwise.
+ * \param queue OQueue to check
+ * \return 1 if empty, 0 otherwise
  */
 int
 oqueue_can_add(
@@ -337,9 +438,10 @@ oqueue_can_add(
   return self->size < self->max_size;
 }
 
-/*! Check if queue is empty
- *
- * Return true(1) if empty, false(0) otherwise.
+/*. Check if OQueue is empty.
+ * 
+ * \param queue OQueue to check
+ * \return 1 if empty, 0 otherwise
  */
 int
 oqueue_is_empty(
