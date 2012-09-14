@@ -297,6 +297,9 @@ AM_CONDITIONAL([HAVE_RUBY_MIN_1_8_7], [test x"${missing_rubyge187}" != xyes])
 AM_CONDITIONAL([HAVE_RUBY_MIN_1_9], [test x"${missing_rubyge19}" != xyes])
 AM_CONDITIONAL([BUILD_GEM], [test x$build_gem = xyes])
 
+AX_WITH_PROG([ADB],[adb])
+AM_CONDITIONAL([HAVE_ADB], [test x"${ADB}" != x])
+
 missing_check=""
 PKG_CHECK_MODULES([CHECK], [check >= 0.9.4], [], [missing_check="yes"])
 AM_CONDITIONAL([HAVE_CHECK], [test x"${missing_check}" != xyes])

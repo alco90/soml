@@ -46,6 +46,7 @@ if len(sys.argv) > 4:
     HOSTARCH=sys.argv[4]
 
 toolchain_dir = os.path.dirname(symbol.ToolPath('gcc'))
+tools_dir = "%s/out/host/%s/bin" % (ANDROID_BUILD_TOP, symbol.Uname())
 ndk_dir = "%s/prebuilt/ndk/android-ndk-r%s/platforms/android-%s/arch-arm" % (ANDROID_BUILD_TOP, NDK, PLATFORM)
 lib_dir = "%s/out/target/product/%s/obj/lib" % (ANDROID_BUILD_TOP, PRODUCT)
 
@@ -86,13 +87,13 @@ show_env()
 
 src_dir = os.path.dirname(sys.argv[0])
 configure_script = "%s/configure" % src_dir
-ret = os.system("%s --host=%s --prefix=/system/usr --exec-prefix=/system --sysconfdir=/etc --bindir=/system/xbin --localstatedir=/system/var --disable-doc --without-python --without-ruby" %
+ret = os.system("%s --host=%s --prefix=/system/usr --exec-prefix=/system --sysconfdir=/etc --bindir=/system/xbin --localstatedir=/system/var --disable-doc --without-python --without-ruby --with-adb=%s/adb" %
         (configure_script, HOSTARCH, tools_dir))
 
 if ret != 0:
     sys.exit(ret)
 
-sys.stderr.write("\nYou need to extend your $PATH before running make:\nPATH=%s:$PATH\n" % (toolchain_dir,))
+sys.stderr.write("\nYou need to extend your $PATH before running make:\nPATH=%s:%s:$PATH\n" % (toolchain_dir, tools_dir))
 
 # This is a trick: spawn a new shell so the environment has propagated.
 #os.execl(os.environ["SHELL"], os.environ["SHELL"])

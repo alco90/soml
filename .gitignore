@@ -48,6 +48,8 @@ m4/*
 !m4/oml_check_macosx.m4
 gnulib
 build-aux
+!build-aux/install-android-sh
+!build-aux/ltmain-android.sh
 .version
 p-debian
 p-rpm

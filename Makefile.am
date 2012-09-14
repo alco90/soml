@@ -180,3 +180,9 @@ pkg-clean:
 distclean-local: pkg-clean
 
 endif #ENABLE_PACKAGING
+
+if HAVE_ADB
+install-android:
+	$(ADB) shell mount -o remount,rw /system
+	ADB=$(ADB) $(MAKE) MKDIR_P="$(ADB) shell mkdir -p" install_sh="$(abs_top_srcdir)/build-aux/install-android-sh" INSTALL="$(abs_top_srcdir)/build-aux/install-android-sh -c" LIBTOOL="$(abs_top_srcdir)/build-aux/ltmain-android.sh" install
+endif
