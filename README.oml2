@@ -25,7 +25,11 @@ PRODUCT_PACKAGES in target/product/core.mk:
   ... \
   libpopt \
   liboml2 \
-  oml2-proxy-server
+  oml2-proxy-server \
+  example-oml2
+
+The example-oml2 application is a simple number generator given as an example of
+how to integrate oml-enabled applications into the Android build system.
 
 Building the source
 -------------------
@@ -34,7 +38,7 @@ From the root of the CyanogenMod source, type
  $ . build/envsetup.sh 
  $ brunch <YOUR-TARGET>
 This should create a CyanogenMod image for your device containing the OML2
-client library as well as the oml2-proxy-server.
+client library as well as the oml2-proxy-server and the example application.
 
 Alternatively, you can build specific items using the `mmm` alias defined when
 sourcing `build/envsetup.sh`.
