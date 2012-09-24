@@ -127,7 +127,56 @@ the tree into a state where you can build it.
 Android builds
 --------------
 
-Building OML for Android consists in leveraging the native process. This
+There are two way to build OML for an Android target.
+
+The first method is to build from this source tree with the standard GNU
+autotools approach, the android_configure.py is in charge of finding the
+relevant paths given the root of an Android build tree, and calling the
+configure script accordingly (it can be used in a VPATH build, which is
+the recommended way described below). If building from a Git checkout,
+you'll need to run the autogen.sh script first, as above.
+
+Before you begin, you need a working Android build tree in which you
+have already compiled an image (this has been tested with various
+revision of CyanogenMod 9). The configure script will search it for
+libraries it depends on.  By default android_configure.py assumes your
+target device is full, but you can specify others as its firts argument
+(e.g., crespo for Nexus S, umts_sholes for Milestone, etc.).
+
+Unfortunately, the current CM9 source does not ship with all the
+libraries that OML depends on. The popt library is missing. We provide a
+separate Android source package for this library at [1].
+
+$ cd /PATH/TO/src/cm4mm
+$ tar xzvf libpopt_android.tar.gz
+$ . build/envsetup.sh
+...
+$ mmm external/libpopt
+
+The android_configure.py script finds the right cross-compilation
+toolchain for you, but you need to extend your PATH so the compilation
+process can find it too. For convenience, the script prints out the
+command to do so.
+
+$ cd oml2
+$ mkdir build
+$ cd build
+$ ANDROID_BUILD_TOP=/PATH/TO/src/cm4mm ../android_configure.py
+...
+
+You need to extend your $PATH before running make:
+PATH=/PATH/TO/cm4mm/prebuilt/linux-x86/toolchain/arm-linux-androideabi-4.4.x/bin:$PATH
+$ PATH=/PATH/TO/cm4mm/prebuilt/linux-x86/toolchain/arm-linux-androideabi-4.4.x/bin:$PATH
+$ make
+$ make DESTDIR=$PWD/_inst install
+
+The last command performs an install into a subdirectory _inst of the
+current directory. The files are distributed following Android layout.
+You can probably trim this install tree a bit, removing all the
+system/usr part, as well as the *.la files in system/lib.
+
+
+The second method consists in leveraging the Android build process. This
 method requires a different set of source files, and cannot work with
 your current tree. If you are working from a Git checkout, you can
 generate this set of source files by running the following commands.
@@ -142,4 +191,5 @@ documenting the build process in more details. Please refer to it.
 
 
 [0] http://check.sourceforge.net
-[1] http://oml.mytestbed.net/projects/oml/files
+[1] http://oml.mytestbed.net/attachments/download/744/libpopt_android.tar.gz
+[2] http://oml.mytestbed.net/projects/oml/files
