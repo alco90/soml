@@ -17,7 +17,7 @@ fi
 rm -rf $dir ${dir}_db
 ${PGPATH}/initdb -U oml2 ${dir}_db
 sed -i "s/^#bytea_output *=.*/bytea_output = 'hex'/g" ${dir}_db/postgresql.conf
-${POSTGRES} -D ${PWD}/${dir}_db -p $pgport &
+${POSTGRES} -D ${PWD}/${dir}_db -p $pgport > ${dir}/pg.log 2>&1 &
 pg_pid=$!
 echo PG=${pg_pid}
 sleep 1
@@ -40,7 +40,13 @@ fi
 if [ ! -z "${TIMEOUT}" ]; then
 	TIMEOUT="${TIMEOUT} 30s"
 fi
-${TIMEOUT} $blobgen -h -n 100 $long --oml-id a --oml-exp-id ${exp} --oml-server localhost:$port --oml-bufsize 110000 || exit 1
+${TIMEOUT} $blobgen -h -n 100 $long --oml-id a --oml-exp-id ${exp} --oml-server localhost:$port --oml-bufsize 110000
+if [ $? != 0 ]; then
+	echo "Error or timeout generating blobs"; 
+	kill $pg_pid;
+	kill $server_pid;
+	exit 1
+fi
 echo "Blob generating client finished OK"
 cd ..
 
