@@ -50,11 +50,12 @@ endif
 
 AM_CPPFLAGS = \
 	-I $(top_srcdir)/proxy_server \
-	-I  $(top_srcdir)/lib/client \
-	-I  $(top_srcdir)/lib/ocomm \
-	-I  $(top_srcdir)/lib/shared \
-	-I  $(top_srcdir)/server \
-	-I  $(srcdir)/../system \
+	-I $(top_srcdir)/lib/client \
+	-I $(top_srcdir)/lib/ocomm \
+	-I $(top_srcdir)/lib/shared \
+	-I $(top_srcdir)/server \
+	-I $(srcdir)/../system \
+	-D PKG_LOCAL_STATE_DIR=\".\" \
 	-DOML_TEST
 
 EXTRA_DIST = msggen.rb issue610.rb.in

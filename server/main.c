@@ -28,7 +28,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <pwd.h>
 #include <grp.h>
 #include <popt.h>
@@ -47,8 +46,8 @@
 #include "client_handler.h"
 #include "sqlite_adapter.h"
 #if HAVE_LIBPQ
-#include "psql_adapter.h"
 #include <libpq-fe.h>
+#include "psql_adapter.h"
 #endif
 
 void
@@ -69,10 +68,10 @@ die (const char *fmt, ...)
 #define DEFAULT_DB_BACKEND "sqlite"
 
 static int listen_port = DEFAULT_PORT;
-char *sqlite_database_dir = NULL;
+extern char *sqlite_database_dir = NULL;
 #if HAVE_LIBPQ
-char *pg_conninfo = DEFAULT_PG_CONNINFO;
-char *pg_user = DEFAULT_PG_USER;
+extern char *pg_conninfo = DEFAULT_PG_CONNINFO;
+extern char *pg_user = DEFAULT_PG_USER;
 #endif
 
 static int log_level = O_LOG_INFO;
@@ -132,40 +131,14 @@ valid_backends ()
 }
 
 db_adapter_create
-database_create_function ()
+database_create_function (char *selected_backend)
 {
   size_t i = 0;
   for (i = 0; i < LENGTH (backends); i++)
-    if (!strncmp (backend, backends[i].name, strlen (backends[i].name)))
+    if (!strncmp (selected_backend, backends[i].name, strlen (backends[i].name)))
       return backends[i].fn;
 
   return NULL;
-}
-
-/**
- * @brief Work out which directory to put sqlite databases in, and set
- * sqlite_database_dir to that directory.
- *
- * This works as follows: if the user specified --data-dir on the
- * command line, we use that value.  Otherwise, if OML_SQLITE_DIR
- * environment variable is set, use that dir.  Otherwise, use
- * PKG_LOCAL_STATE_DIR, which is a preprocessor macro set by the build
- * system (under Autotools defaults this should be
- * ${prefix}/var/oml2-server, but on a distro it should be something
- * like /var/lib/oml2-server).
- *
- */
-void
-setup_sqlite_database_dir (void)
-{
-  if (!sqlite_database_dir) {
-    const char *oml_sqlite_dir = getenv ("OML_SQLITE_DIR");
-    if (oml_sqlite_dir) {
-      sqlite_database_dir = xstrndup (oml_sqlite_dir, strlen (oml_sqlite_dir));
-    } else {
-      sqlite_database_dir = PKG_LOCAL_STATE_DIR;
-    }
-  }
 }
 
 /**
@@ -201,84 +174,21 @@ setup_logging (char *logfile, int level)
 }
 
 void
-setup_backend_sqlite (void)
-{
-  setup_sqlite_database_dir ();
-
-  /*
-   * The man page says access(2) should be avoided because it creates
-   * a race condition between calls to access(2) and open(2) where an
-   * attacker could swap the underlying file for a link to a file that
-   * the unprivileged user does not have permissions to access, which
-   * the effective user does.  We don't use the access/open sequence
-   * here. We check that we can create files in the
-   * sqlite_database_dir directory, and fail if not (as the server
-   * won't be able to do useful work otherwise).
-   *
-   * An attacker could potentially change the underlying file to a
-   * link and still cause problems if oml2-server is run as root or
-   * setuid root, but this check must happen after drop_privileges()
-   * is called, so if oml2-server is not run with superuser privileges
-   * such an attack would still fail.
-   *
-   * oml2-server should not be run as root or setuid root in any case.
-   */
-  if (access (sqlite_database_dir, R_OK | W_OK | X_OK) == -1)
-    die ("sqlite: Can't access SQLite database directory %s: %s\n",
-         sqlite_database_dir, strerror (errno));
-
-  loginfo ("sqlite: Creating SQLite3 databases in %s\n", sqlite_database_dir);
-}
-
-#if HAVE_LIBPQ
-void
-setup_backend_postgresql (const char *conninfo, const char *user)
-{
-  loginfo ("psql: Sending experiment data to PostgreSQL server with user '%s'\n",
-           pg_user);
-  MString *str = mstring_create ();
-  mstring_sprintf (str, "%s user=%s dbname=postgres", conninfo, user);
-  PGconn *conn = PQconnectdb (mstring_buf (str));
-
-  logwarn ("PostgreSQL backend is still experimental\n");
-
-  if (PQstatus (conn) != CONNECTION_OK)
-    die ("psql: Could not connect to PostgreSQL database (conninfo \"%s\"): %s\n",
-         conninfo, PQerrorMessage (conn));
-
-  /* oml2-server must be able to create new databases, so check that
-     our user has the required role attributes */
-  mstring_set (str, "");
-  mstring_sprintf (str, "SELECT rolcreatedb FROM pg_roles WHERE rolname='%s'", user);
-  PGresult *res = PQexec (conn, mstring_buf (str));
-  if (PQresultStatus (res) != PGRES_TUPLES_OK)
-    die ("psql: Failed to determine role privileges for role '%s': %s\n",
-         user, PQerrorMessage (conn));
-  char *has_create = PQgetvalue (res, 0, 0);
-  if (strcmp (has_create, "t") == 0)
-    logdebug ("psql: User '%s' has CREATE DATABASE privileges\n", user);
-  else
-    die ("psql: User '%s' does not have required role CREATE DATABASE\n", user);
-
-  PQclear (res);
-  PQfinish (conn);
-}
-#endif
-
-void
 setup_backend (void)
 {
   logdebug ("Database backend: '%s'\n", backend);
 
-  if (!database_create_function ())
+  if (!database_create_function (backend))
     die ("Unknown database backend '%s' (valid backends: %s)\n",
          backend, valid_backends ());
 
   if (!strcmp (backend, "sqlite"))
-    setup_backend_sqlite ();
+    if(sq3_backend_setup ())
+      exit(EXIT_FAILURE);
 #if HAVE_LIBPQ
   else if (!strcmp (backend, "postgresql"))
-    setup_backend_postgresql (pg_conninfo, pg_user);
+    if(psql_backend_setup ())
+      exit(EXIT_FAILURE);
 #endif
 }
 
