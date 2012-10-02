@@ -30,7 +30,10 @@ if [ ! -x ${blobgen} ]; then
 	exit 1
 fi
 
-$blobgen -h -n 100 $long --oml-id a --oml-exp-id ${exp} --oml-server localhost:$port --oml-bufsize 110000 || exit 1
+if [ ! -z "${TIMEOUT}" ]; then
+	TIMEOUT="${TIMEOUT} 30s"
+fi
+${TIMEOUT} $blobgen -h -n 100 $long --oml-id a --oml-exp-id ${exp} --oml-server localhost:$port --oml-bufsize 110000 || exit 1
 
 cd ..
 
