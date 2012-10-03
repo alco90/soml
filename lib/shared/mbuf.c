@@ -194,6 +194,14 @@ mbuf_wrptr (MBuffer* mbuf)
   return mbuf->wrptr;
 }
 
+/** Resize an MBuffer to make it bigger.
+ *
+ * If new_length is smaller than the current length, do nothing.
+ *
+ * \param mbuf MBuffer to resize
+ * \param new_length length to resize the buffer to
+ * \return 0 on success, -1 otherwise
+ */
 int
 mbuf_resize (MBuffer* mbuf, size_t new_length)
 {

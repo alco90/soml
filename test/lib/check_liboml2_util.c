@@ -45,8 +45,8 @@ START_TEST (test_util_uri)
   test_data[4].expect = OML_URI_UDP;
 
   for (i=0; i<N_URI_TEST; i++) {
-    fail_unless(
-        (res=oml_uri_type(test_data[i].uri)) == test_data[i].expect,
+    res = oml_uri_type(test_data[i].uri);
+    fail_unless(res == test_data[i].expect,
         "Invalid type for `%s': %d instead of %d", test_data[i].uri, res, test_data[i].expect); 
   }
 }

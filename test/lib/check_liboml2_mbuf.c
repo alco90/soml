@@ -113,6 +113,9 @@ START_TEST (test_mbuf_resize_contents)
 
   memcpy (mbuf->base, s, length_1);
   result = mbuf_resize (mbuf, length_1 / 2);
+  fail_if (result == -1);
+  fail_if (mbuf->base == NULL);
+  fail_if (mbuf_length (mbuf) != length_1);
 
 }
 END_TEST
