@@ -77,14 +77,16 @@ file_stream_new(const char *file)
   return (OmlOutStream*)self;
 }
 
-/**
- * \brief write data to a file without any sanity check
+/** Write data to a file without any sanity check.
+ *
  * \param hdl pointer to the OmlOutStream
  * \param buffer pointer to the buffer containing the data to write
  * \param buffer length of the buffer to write
  * \param header pointer to header information
  * \param buffer length of the header information
- * \return amount of data written, or -1 on error
+ * \return the amount of data written, or 0 on error (or no data to write)
+ *
+ * \see fwrite(3)
  */
 static inline size_t
 _file_stream_write(
@@ -95,14 +97,16 @@ _file_stream_write(
   return fwrite(buffer, 1, length, file_hdl); //(FILE*)((OmlFileOutStream*)hdl)->f);
 }
 
-/**
- * \brief write data to a file
+/** Write data to a file.
+ *
  * \param hdl pointer to the OmlOutStream
  * \param buffer pointer to the buffer containing the data to write
- * \param length length of the buffer to write
- * \param header pointer to an optional buffer containing headers to be sent after (re)connecting
- * \param header_length length of the header to write; must be 0 if header is NULL
- * \return amount of data written, or -1 on error
+ * \param buffer length of the buffer to write
+ * \param header pointer to header information
+ * \param buffer length of the header information
+ * \return the amount of data written, or 0 on error (or no data to write)
+ *
+ * \see fwrite(3)
  */
 size_t
 file_stream_write(
@@ -117,9 +121,9 @@ file_stream_write(
   /* The header can be NULL, but header_length MUST be 0 in that case */
   assert(header || !header_length);
 
-  if (!self) return -1;
+  if (!self) return 0;
   FILE* f = self->f;
-  if (f == NULL) return -1;
+  if (f == NULL) return 0;
 
   if (! self->header_written) {
     size_t count;
@@ -147,7 +151,7 @@ file_stream_write(
  * \param hdl pointer to the OmlOutStream
  * \param buffer pointer to the buffer containing the data to write
  * \param buffer length of the buffer to write
- * \return amount of data written, or -1 on error
+ * \return amount of data written, or 0 on error
  */
 size_t
 file_stream_write_flush(
@@ -159,9 +163,9 @@ file_stream_write_flush(
 ) {
   OmlFileOutStream* self = (OmlFileOutStream*)hdl;
 
-  if (!self) return -1;
+  if (!self) return 0;
   FILE* f = self->f;
-  if (f == NULL) return -1;
+  if (f == NULL) return 0;
 
   size_t count = file_stream_write(hdl, buffer, length, header, header_length);
   fflush(f);

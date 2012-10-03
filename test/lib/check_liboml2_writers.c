@@ -21,6 +21,7 @@
  *
  */
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <stdint.h>
 #include <math.h>
@@ -82,7 +83,7 @@ START_TEST (test_fw_create_buffered)
   /* The OmlFileOutStream is buffered by default */
   fail_unless(file_stream_get_buffered(os));
 
-  fail_unless(os->write(NULL, buf, 0, NULL, 0)==-1); 
+  fail_unless(os->write(NULL, buf, 0, NULL, 0)==0);
 
   /* Buffered operation */
   fail_unless(os->write(os, buf, sizeof(buf), NULL, 0)==sizeof(buf)); 

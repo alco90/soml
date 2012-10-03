@@ -609,8 +609,10 @@ socket_sendto(
   // TODO: Catch SIGPIPE signal if other side is half broken
   if ((sent = sendto(self->sockfd, buf, buf_size, 0,
                     (struct sockaddr *)&(self->servAddr),
-                    sizeof(self->servAddr))) < 0) {
-    if (errno == EPIPE || errno == ECONNRESET) {
+                    sizeof(self->servAddr))) == 0) {
+    if (errno == 0) {
+      return sent;
+    } else if (errno == EPIPE || errno == ECONNRESET) {
       // The other end closed the connection.
       self->is_disconnected = 1;
       o_log(O_LOG_ERROR, "socket:%s: The remote peer closed the connection: %s\n",
@@ -625,7 +627,6 @@ socket_sendto(
     }
     return -1;
   }
-  return sent;
 }
 
 

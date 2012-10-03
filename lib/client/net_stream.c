@@ -198,6 +198,17 @@ net_stream_write(
   return count;
 }
 
+/** Write data to a socket.
+ *
+ * \param hdl pointer to the OmlOutStream
+ * \param buffer pointer to the buffer containing the data to write
+ * \param buffer length of the buffer to write
+ * \param header pointer to header information
+ * \param buffer length of the header information
+ * \return the amount of data written, or 0 on error
+ *
+ * \see sendto(3)
+ */
 static size_t
 socket_write(
   OmlNetOutStream* self,
@@ -210,6 +221,7 @@ socket_write(
     logwarn ("Net_stream: connection to server at %s://%s:%d was lost\n",
              self->protocol, self->host, self->port);
     self->socket = NULL;      // Server closed the connection
+    return 0;
   }
   return result;
 }
