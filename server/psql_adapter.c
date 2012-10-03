@@ -4,15 +4,23 @@
 #include <inttypes.h>
 #include <libpq-fe.h>
 #include <time.h>
-#include "log.h"
 #include <sys/time.h>
-#include "database.h"
-#include "oml_util.h"
-#include "mstring.h"
-#include "mem.h"
+#include <netdb.h>
+#include <arpa/inet.h>
 
-char *pg_conninfo;
-char *pg_user;
+#include "oml_util.h"
+#include "mem.h"
+#include "mstring.h"
+#include "log.h"
+#include "database.h"
+#include "psql_adapter.h"
+
+char *pg_host = DEFAULT_PG_HOST;
+char *pg_port = DEFAULT_PG_PORT;
+int pg_portnum = -1; /* Set via getservbyname(3) in psql_backend_setup */
+char *pg_user = DEFAULT_PG_USER;
+char *pg_pass = DEFAULT_PG_PASS;
+char *pg_conninfo = DEFAULT_PG_CONNINFO;
 
 typedef struct _psqlDB {
   PGconn *conn;
@@ -39,15 +47,25 @@ int psql_set_key_value (Database *database, const char *table,
 int
 psql_backend_setup ()
 {
+  struct servent *sse;
   MString *str;
-  
-  loginfo ("psql: Sending experiment data to PostgreSQL server with user '%s'\n",
-           pg_user);
-  str = mstring_create ();
-  mstring_sprintf (str, "%s user=%s dbname=postgres", pg_conninfo, pg_user);
-  PGconn *conn = PQconnectdb (mstring_buf (str));
 
   logwarn ("PostgreSQL backend is still experimental\n");
+
+  sse = getservbyname(pg_port, NULL);
+  if (sse) {
+    pg_portnum = ntohs(sse->s_port);
+  } else {
+    pg_portnum = 5432;
+    logwarn("psql: Could not resolve service '%s', defaulting to %d\n", pg_port, pg_portnum);
+  }
+  loginfo ("psql: Sending experiment data to PostgreSQL server %s:%d as user '%s'\n",
+           pg_host, pg_portnum, pg_user);
+
+  str = mstring_create ();
+  mstring_sprintf (str, "host=%s port=%d user=%s pass=%s dbname=postgres %s",
+      pg_host, pg_portnum, pg_user, pg_pass, pg_conninfo);
+  PGconn *conn = PQconnectdb (mstring_buf (str));
 
   if (PQstatus (conn) != CONNECTION_OK) {
     logerror ("psql: Could not connect to PostgreSQL database (conninfo \"%s\"): %s\n",

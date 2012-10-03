@@ -63,16 +63,17 @@ die (const char *fmt, ...)
 #define DEFAULT_PORT 3003
 #define DEFAULT_PORT_STR "3003"
 #define DEFAULT_LOG_FILE "oml_server.log"
-#define DEFAULT_PG_CONNINFO "host=localhost"
-#define DEFAULT_PG_USER "oml"
 #define DEFAULT_DB_BACKEND "sqlite"
 
 static int listen_port = DEFAULT_PORT;
 extern char *sqlite_database_dir = NULL;
 #if HAVE_LIBPQ
-extern char *pg_conninfo = DEFAULT_PG_CONNINFO;
-extern char *pg_user = DEFAULT_PG_USER;
-#endif
+extern char *pg_host;
+extern char *pg_port;
+extern char *pg_user;
+extern char *pg_pass;
+extern char *pg_conninfo;
+#endif /* HAVE_LIBPQ */
 
 static int log_level = O_LOG_INFO;
 static char* logfile_name = NULL;
@@ -86,7 +87,10 @@ struct poptOption options[] = {
   { "backend", 'b', POPT_ARG_STRING, &backend, 0, "Database server backend", DEFAULT_DB_BACKEND},
   { "data-dir", 'D', POPT_ARG_STRING, &sqlite_database_dir, 0, "Directory to store database files (sqlite)", "DIR" },
 #if HAVE_LIBPQ
+  { "pg-host", '\0', POPT_ARG_STRING, &pg_host, 0, "PostgreSQL server host to connect to", DEFAULT_PG_HOST },
+  { "pg-port", '\0', POPT_ARG_STRING, &pg_port, 0, "PostgreSQL server port to connect to", DEFAULT_PG_PORT },
   { "pg-user", '\0', POPT_ARG_STRING, &pg_user, 0, "PostgreSQL user to connect as", DEFAULT_PG_USER },
+  { "pg-pass", '\0', POPT_ARG_STRING, &pg_pass, 0, "Password of the PostgreSQL user", DEFAULT_PG_PASS },
   { "pg-connect", '\0', POPT_ARG_STRING, &pg_conninfo, 0, "PostgreSQL connection info string", "\"" DEFAULT_PG_CONNINFO "\""},
 #endif
   { "user", '\0', POPT_ARG_STRING, &uidstr, 0, "Change server's user id", "UID" },
