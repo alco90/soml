@@ -425,6 +425,9 @@ module OML4R
       @queue.push "protocol: #{PROTOCOL}"
       d = (@domain == :default) ? @@default_domain : @domain
       raise "Missing domain name" unless d
+      # Protocol V4
+      #@queue.push "domain: #{d}"
+      #@queue.push "start-time: #{startTime.tv_sec}"
       @queue.push "experiment-id: #{d}"
       @queue.push "start_time: #{startTime.tv_sec}"
       @queue.push "sender-id: #{nodeID}"

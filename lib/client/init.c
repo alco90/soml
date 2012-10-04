@@ -943,6 +943,9 @@ write_meta(void)
     char s[128];
     sprintf(s, "protocol: %d", OML_PROTOCOL_VERSION);
     writer->meta(writer, s);
+#if OML_PROTOCOL_VERSION == 4
+# error Protocol V4 needs domain and start-time instead of experiment-id and start_time
+#endif
     sprintf(s, "experiment-id: %s", omlc_instance->domain);
     writer->meta(writer, s);
     sprintf(s, "start_time: %d", (int)omlc_instance->start_time);

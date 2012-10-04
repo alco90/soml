@@ -153,6 +153,9 @@ class OMLBase:
 
         self.starttime = int(time())
 
+        # Protocol V4
+        #header = "protocol: " + str(self.PROTOCOL) + '\n' + "domain: " + str(self.domain) + '\n' + \
+        #       "start-time: " + str(self.starttime) + '\n' + "sender-id: " + str(self.sender) + '\n' + \
         header = "protocol: " + str(self.PROTOCOL) + '\n' + "experiment-id: " + str(self.domain) + '\n' + \
                "start_time: " + str(self.starttime) + '\n' + "sender-id: " + str(self.sender) + '\n' + \
                "app-name: " + str(self.appname) + '\n' + \
