@@ -20,6 +20,7 @@ static struct {
   { "schema", H_SCHEMA },
   { "start_time", H_START_TIME },
   { "start-time", H_START_TIME },
+  { "domain", H_DOMAIN },
 
   { "protocolx", H_NONE },
   { "experiment-idx", H_NONE },
@@ -29,6 +30,7 @@ static struct {
   { "schemax", H_NONE },
   { "start_timex", H_NONE },
   { "start-timex", H_NONE },
+  { "domaine", H_NONE },
 
   /*
   { "protocol", H_NONE},
@@ -46,12 +48,14 @@ static struct {
   { "pro", H_NONE},
   { "rpotocol", H_NONE},
   { "pretocol", H_NONE},
-
   { " protocol", H_NONE},
+
   { "experiment-id ", H_NONE},
   { "sschema", H_NONE },
   { "start time", H_NONE },
   { "starttime", H_NONE },
+
+  { " domain", H_NONE },
 
   { NULL, H_NONE },
 };
@@ -65,7 +69,7 @@ static struct {
   int is_null;
   int is_null_short; // NULL in the short test
 } vector_headers [] = {
-  { "protocol: 3", { H_PROTOCOL, "3", NULL }, 0, 1 },
+  { "protocol: 4", { H_PROTOCOL, "4", NULL }, 0, 1 },
   { "experiment-id: abc", { H_DOMAIN, "abc", NULL }, 0, 0 },
   { "content: binary", { H_CONTENT, "binary", NULL }, 0, 0 },
   { "content: text  ", { H_CONTENT, "text  ", NULL }, 0, 0 },
