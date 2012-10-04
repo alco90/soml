@@ -213,7 +213,7 @@ void client_handler_update_name(ClientHandler *self)
     snprintf(self->name, MAX_STRING_SIZE, "%s:%s:%s", self->database->name, self->sender_name, self->app_name);
     self->name[MAX_STRING_SIZE-1] = 0;
   } else if (self->event) {
-    logwarn("%s: Some identification fields (experiment-id, sender-id or app-name) were missing in the headers\n", self->event->name);
+    logwarn("%s: Some identification fields (domain, sender-id or app-name) were missing in the headers\n", self->event->name);
   } else {
     logerror("Unitialised fields in ClientHandler after end of headers; this is probably a bug\n");
   }
@@ -289,9 +289,6 @@ process_schema(ClientHandler* self, char* value)
   }
 }
 
-#define MAX_PROTOCOL_VERSION OML_PROTOCOL_VERSION
-#define MIN_PROTOCOL_VERSION 1
-
 /**
  * \brief Process a singel key/value pair contained in the header
  * \param self the client handler
@@ -314,13 +311,13 @@ process_meta(ClientHandler* self, char* key, char* value)
       self->state = C_PROTOCOL_ERROR;
       return;
     }
-  } else if (strcmp(key, "experiment-id") == 0) {
+  } else if (strcmp(key, "domain") == 0 || strcmp(key, "experiment-id") == 0) {
     self->database = database_find(value);
     if (!self->database)
       self->state = C_PROTOCOL_ERROR;
   } else if (strcmp(key, "start-time") == 0 || strcmp(key, "start_time") == 0) {
     if (self->database == NULL) {
-      logerror("%s: Meta 'start-time' needs to come after 'experiment-id'.\n",
+      logerror("%s: Meta 'start-time' needs to come after 'domain'.\n",
           self->name);
       self->state = C_PROTOCOL_ERROR;
     } else {
@@ -336,7 +333,7 @@ process_meta(ClientHandler* self, char* key, char* value)
     }
   } else if (strcmp(key, "sender-id") == 0) {
     if (self->database == NULL) {
-      logerror("%s: Meta 'sender-id' needs to come after 'experiment-id'.\n",
+      logerror("%s: Meta 'sender-id' needs to come after 'domain'.\n",
           self->name);
       self->state = C_PROTOCOL_ERROR;
     } else {

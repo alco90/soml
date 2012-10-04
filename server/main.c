@@ -248,7 +248,7 @@ main(int argc, const char **argv)
     switch (c) {
     case 'v':
       printf(V_STRING, VERSION);
-      printf("OML Protocol V%d\n", OML_PROTOCOL_VERSION);
+      printf("OML Protocol V%d--%d\n", MIN_PROTOCOL_VERSION, MAX_PROTOCOL_VERSION);
       printf(COPYRIGHT);
       return 0;
     }
@@ -260,7 +260,7 @@ main(int argc, const char **argv)
     die ("%s: %s\n", poptBadOption (optCon, POPT_BADOPTION_NOALIAS), poptStrerror (c));
 
   loginfo(V_STRING, VERSION);
-  loginfo("OML Protocol V%d\n", OML_PROTOCOL_VERSION);
+  loginfo("OML Protocol V%d--%d\n", MIN_PROTOCOL_VERSION, MAX_PROTOCOL_VERSION);
   loginfo(COPYRIGHT);
 
   eventloop_init();
