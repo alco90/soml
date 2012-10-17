@@ -203,6 +203,20 @@ psql_table_create_meta (Database *db, const char *name)
   return -1;
 }
 
+/** Build a URI for this database.
+ *
+ * \param db Database object
+ * \param str output string buffer
+ * \param size length of str
+ * \return 0 on success, -1 otherwise (e.g., str buffer too small)
+ */
+int psql_get_uri(Database *db, char *str,  size_t size)
+{
+  if(snprintf(uri, size, "postgresql://%s@%s:%s/%s", pg_user, pg_host, pg_port, db->name) >= size)
+    return 1;
+  return 0;
+}
+
 /**
  * @brief Release the psql database.
  *
@@ -879,6 +893,7 @@ psql_create_database(Database* db)
   db->add_sender_id = psql_add_sender_id;
   db->get_metadata = psql_get_metadata;
   db->set_metadata = psql_set_metadata;
+  db->get_uri = psql_get_uri;
   db->get_table_list = psql_get_table_list;
 
   db->handle = self;
