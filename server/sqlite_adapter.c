@@ -31,7 +31,6 @@
 #include <unistd.h>
 
 #include "database.h"
-#include "hook.h"
 #include "htonll.h"
 #include "log.h"
 #include "mem.h"
@@ -195,12 +194,13 @@ sq3_table_create_meta (Database *db, const char *name)
 /** Build a URI for this database.
  *
  * \param db Database object
- * \param str output string buffer
- * \param size length of str
- * \return 0 on success, -1 otherwise (e.g., str buffer too small)
+ * \param uri output string buffer
+ * \param size length of uri
+ * \return 0 on success, -1 otherwise (e.g., uri buffer too small)
  */
-int sq3_get_uri(Database *db, char *str,  size_t size)
+int sq3_get_uri(Database *db, char *uri,  size_t size)
 {
+  char fullpath[PATH_MAX+1];
   if(snprintf(uri, size, "file:%s/%s.sq3\n", realpath(sqlite_database_dir, fullpath), db->name) >= size)
     return 1;
   return 0;
@@ -214,25 +214,12 @@ int sq3_get_uri(Database *db, char *str,  size_t size)
 void
 sq3_release(Database* db)
 {
-  MString *hook_command = mstring_create();
-  char fullpath[PATH_MAX+1];
   Sq3DB* self = (Sq3DB*)db->handle;
   end_transaction (self);
   sqlite3_close(self->conn);
-  // TODO: Release table specific data
-  
-  if(hook_enabled()) {
-    if (mstring_sprintf(hook_command, "%s file:%s/%s.sq3\n",
-          HOOK_CMD_DBCLOSED, realpath(sqlite_database_dir, fullpath), db->name) == -1) {
-      logwarn("sqlite:%s: Failed to construct command string for event hook\n", db->name);
-    }
-    if(hook_write(mstring_buf(hook_command), mstring_len(hook_command)) < (int)mstring_len(hook_command))
-      logwarn("sqlite:%s: Failed to send command string to event hook: %s\n", db->name, strerror(errno));
-    mstring_delete(hook_command);
-  }
 
-  xfree(self);
   db->handle = NULL;
+  xfree(self);
 }
 
 /**

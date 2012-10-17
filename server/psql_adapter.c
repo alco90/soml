@@ -206,11 +206,11 @@ psql_table_create_meta (Database *db, const char *name)
 /** Build a URI for this database.
  *
  * \param db Database object
- * \param str output string buffer
- * \param size length of str
- * \return 0 on success, -1 otherwise (e.g., str buffer too small)
+ * \param uri output string buffer
+ * \param size length of uri
+ * \return 0 on success, -1 otherwise (e.g., uri buffer too small)
  */
-int psql_get_uri(Database *db, char *str,  size_t size)
+int psql_get_uri(Database *db, char *uri,  size_t size)
 {
   if(snprintf(uri, size, "postgresql://%s@%s:%s/%s", pg_user, pg_host, pg_port, db->name) >= size)
     return 1;
