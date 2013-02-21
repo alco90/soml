@@ -379,6 +379,158 @@ START_TEST(test_binary_flexibility)
 }
 END_TEST
 
+START_TEST(test_binary_metadata)
+{
+  /* XXX: Code duplication with check_binary_protocol.c:test_binary_metadata*/
+  ClientHandler *ch;
+  Database *db;
+  sqlite3_stmt *stmt;
+  SockEvtSource source;
+  MBuffer* mbuf = mbuf_create();
+
+  char domain[] = "binary-meta-test";
+  char dbname[sizeof(domain)+3];
+  char table[3][12] = { "meta1_table" };
+  double time1 = 1.096202;
+  double time2 = 2.092702;
+  char k1[] = "key1";
+  char v1[] = "val1";
+  char k2[] = "key2";
+  char v2[] = "val2";
+
+  char h[200];
+  char s1[200];
+  char sample[200];
+  char select[200];
+
+  int rc = -1;
+
+  OmlValue v[2];
+  oml_value_array_init(v, 2);
+
+  /* Remove pre-existing databases */
+  *dbname=0;
+  snprintf(dbname, sizeof(dbname), "%s.sq3", domain);
+  unlink(dbname);
+
+  o_set_log_level(-1);
+  logdebug("%s\n", __FUNCTION__);
+
+  snprintf(s1, sizeof(s1), "1 %s size:uint32", table[0]);
+  snprintf(h, sizeof(h),  "protocol: 4\ndomain: %s\nstart-time: 1332132092\nsender-id: %s\napp-name: %s\ncontent: binary\nschema: %s\n\n", domain, basename(__FILE__), __FUNCTION__, s1);
+  snprintf(select, sizeof(select), "select key, value from _experiment_metadata;");
+
+  memset(&source, 0, sizeof(SockEvtSource));
+  source.name = "text meta socket";
+  ch = check_server_prepare_client_handler("test_text_meta", &source);
+  fail_unless(ch->state == C_HEADER);
+  fail_unless(ch->table_count == 0, "Unexpected number of tables (%d instead of 0)", ch->table_count);
+
+  logdebug("Sending header '%s'\n", h);
+  client_callback(&source, ch, h, strlen(h));
+
+  fail_unless(ch->state == C_BINARY_DATA, "Inconsistent state: expected %d, got %d", C_BINARY_DATA, ch->state);
+  fail_unless(ch->content == C_BINARY_DATA);
+  fail_if(ch->database == NULL);
+  fail_if(ch->sender_id == 0);
+  fail_if(ch->sender_name == NULL);
+  fail_if(ch->app_name == NULL);
+  fail_unless(ch->table_count == 1, "Unexpected number of tables (%d instead of 1)", ch->table_count);
+
+  logdebug("Sending meta '%s':'%s'\n", k1, v1);
+  mbuf_clear(mbuf);
+  marshal_init(mbuf, OMB_DATA_P);
+  marshal_measurements(mbuf, 0, 1, time1);
+  oml_value_set_type(&v[0], OML_STRING_VALUE);
+  oml_value_set_type(&v[1], OML_STRING_VALUE);
+  omlc_set_const_string(*oml_value_get_value(&v[0]), k1);
+  omlc_set_const_string(*oml_value_get_value(&v[1]), v1);
+  marshal_values(mbuf, v, 2);
+  marshal_finalize(mbuf);
+  oml_value_array_reset(v, 2);
+  printmbuf(mbuf);
+  client_callback(&source, ch, mbuf_buffer(mbuf), mbuf_fill(mbuf));
+  fail_unless(ch->state == C_BINARY_DATA, "Inconsistent state: expected %d, got %d", C_BINARY_DATA, ch->state);
+
+  logdebug("Sending meta '%s':'%s'\n", k2, v2);
+  mbuf_clear(mbuf);
+  marshal_init(mbuf, OMB_DATA_P);
+  marshal_measurements(mbuf, 0, 1, time1);
+  oml_value_set_type(&v[0], OML_STRING_VALUE);
+  oml_value_set_type(&v[1], OML_STRING_VALUE);
+  omlc_set_const_string(*oml_value_get_value(&v[0]), k2);
+  omlc_set_const_string(*oml_value_get_value(&v[1]), v2);
+  marshal_values(mbuf, v, 2);
+  marshal_finalize(mbuf);
+  oml_value_array_reset(v, 2);
+  printmbuf(mbuf);
+  client_callback(&source, ch, mbuf_buffer(mbuf), mbuf_fill(mbuf));
+  fail_unless(ch->state == C_BINARY_DATA, "Inconsistent state: expected %d, got %d", C_BINARY_DATA, ch->state);
+
+#if DB_HAS_PKEY /* #814 */
+  logdebug("Sending meta '%s':'%s'\n", k1, v2);
+  mbuf_clear(mbuf);
+  marshal_init(mbuf, OMB_DATA_P);
+  marshal_measurements(mbuf, 0, 1, time1);
+  oml_value_set_type(&v[0], OML_STRING_VALUE);
+  oml_value_set_type(&v[1], OML_STRING_VALUE);
+  omlc_set_const_string(*oml_value_get_value(&v[0]), k1);
+  omlc_set_const_string(*oml_value_get_value(&v[1]), v2);
+  marshal_values(mbuf, v, 2);
+  marshal_finalize(mbuf);
+  oml_value_array_reset(v, 2);
+  printmbuf(mbuf);
+  client_callback(&source, ch, mbuf_buffer(mbuf), mbuf_fill(mbuf));
+  fail_unless(ch->state == C_BINARY_DATA, "Inconsistent state: expected %d, got %d", C_BINARY_DATA, ch->state);
+#endif
+
+  check_server_destroy_client_handler(ch);
+  mbuf_destroy(mbuf);
+
+  logdebug("Checking recorded data in %s.sq3\n", domain);
+  /* Open database */
+  db = database_find(domain);
+  fail_if(db == NULL || ((Sq3DB*)(db->handle))->conn == NULL , "Cannot open SQLite3 database");
+
+  rc = sqlite3_prepare_v2(((Sq3DB*)(db->handle))->conn, select, -1, &stmt, 0);
+  fail_unless(rc == 0, "Preparation of statement `%s' failed; rc=%d", select, rc);
+  rc = sqlite3_step(stmt);
+  rc = sqlite3_step(stmt); /* Skip start_time */
+#if DB_HAS_SCHEMA_META /* # 1017 */
+  rc = sqlite3_step(stmt); /* Skip schema */
+#endif
+  fail_unless(rc == 100, "First steps of statement `%s' failed; rc=%d", select, rc);
+  fail_if(strcmp(k1, sqlite3_column_text(stmt, 0)),
+      "Invalid 1st key in metadata table: expected `%s', got `%s'",
+      k1, sqlite3_column_text(stmt, 0));
+  fail_if(strcmp(v1, sqlite3_column_text(stmt, 1)),
+      "Invalid 1st value in metadata table: expected `%s', got `%s'",
+      v1, sqlite3_column_text(stmt, 1));
+
+  rc = sqlite3_step(stmt);
+  fail_unless(rc == 100, "Second step of statement `%s' failed; rc=%d", select, rc);
+  fail_if(strcmp(k2, sqlite3_column_text(stmt, 0)),
+      "Invalid 2nd key in metadata table: expected `%s', got `%s'",
+      k2, sqlite3_column_text(stmt, 0));
+  fail_if(strcmp(v2, sqlite3_column_text(stmt, 1)),
+      "Invalid 2nd value in metadata table: expected `%s', got `%s'",
+      v2, sqlite3_column_text(stmt, 1));
+
+#if DB_HAS_PKEY /* #814 */
+  rc = sqlite3_step(stmt);
+  fail_unless(rc == 100, "Second step of statement `%s' failed; rc=%d", select, rc);
+  fail_if(strcmp(k1, sqlite3_column_text(stmt, 0)),
+      "Invalid 3rd key in metadata table: expected `%s', got `%s'",
+      k1, sqlite3_column_text(stmt, 0));
+  fail_if(strcmp(v2, sqlite3_column_text(stmt, 1)),
+      "Invalid 3rd value in metadata table: expected `%s', got `%s'",
+      v2, sqlite3_column_text(stmt, 1));
+#endif DB_HAS_PKEY
+
+  database_release(db);
+}
+END_TEST
+
 Suite* binary_protocol_suite (void)
 {
   Suite* s = suite_create ("Binary protocol");
@@ -394,6 +546,7 @@ Suite* binary_protocol_suite (void)
 
   TCase* tc_bin_flex = tcase_create ("Binary flexibility");
   tcase_add_test (tc_bin_flex, test_binary_flexibility);
+  tcase_add_test (tc_bin_flex, test_binary_metadata);
   suite_add_tcase (s, tc_bin_flex);
 
   return s;
