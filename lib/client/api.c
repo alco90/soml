@@ -27,19 +27,18 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <assert.h>
+#include <sys/time.h>
 
 #include "oml2/oml_filter.h"
 #include "oml2/omlc.h"
 #include "ocomm/o_log.h"
 #include "oml_value.h"
+#include "validate.h"
 #include "client.h"
 
-/**
- * \brief Called when the particular MStream has been filled.
- * \param ms the oml stream to process
- */
-static void
-omlc_ms_process(OmlMStream* ms);
+static void omlc_ms_process(OmlMStream* ms);
+static void omlc_ms_send_metadata(OmlMStream *ms, const char *key, const OmlValueU *value, OmlValueT type);
 
 /** DEPRECATED
  * \see omlc_inject
@@ -123,7 +122,81 @@ omlc_inject(OmlMP *mp, OmlValueU *values)
 int
 omlc_inject_metadata(OmlMP *mp, const char *key, const OmlValueU *value, OmlValueT type, const char *fname)
 {
-  return -1;
+  char *fullkey;
+  int len, len2;
+  int i, ret = -1;
+
+  OmlMPDef *f;
+  OmlMStream *ms;
+
+  if (omlc_instance == NULL) {
+    logerror("Cannot inject metadata until omlc_start has been called\n");
+
+  } else if (!mp || !key || !value) {
+    logwarn("Trying to inject metadata with missing mp, key and/or value\n");
+
+  } else if (! validate_name(key)) {
+    logerror("%s is an invalid metadata key name\n", key);
+
+  } else if (type != OML_STRING_VALUE) {
+    logwarn("Currently, only OML_STRING_VALUE are valid as metadata value\n");
+
+  } else {
+    assert(mp->name);
+
+    len = strlen(key);
+    if (fname) {
+      /* Make sure fname exists in this MP */
+      /* XXX: This should probably be done in another function (returning the OmlMPDef? */
+      f = mp->param_defs;
+      loginfo("%s %d\n", fname, mp->param_count);
+      for (i = 0; (i < mp->param_count) && strcmp(f[i].name, fname); i++) {
+        loginfo("%s\n", f[i].name);
+      }
+      if (i >= mp->param_count) {
+        logerror("Field %s not found in MP %s\n", fname, mp->name);
+        return -1; /* XXX: It would be too messy to try to get to the end return from here */
+      }
+
+      len += strlen(fname) + 1; /* '_' */
+    }
+    len += strlen(mp->name) + 1; /* '_' */
+
+    fullkey = xmalloc(len + 1);
+    if (!fullkey) {
+      logerror("Cannot allocate memory for full key name\n");
+
+    } else {
+      len2 = snprintf(fullkey, len + 1, "%s_", mp->name);
+      if (fname) {
+        len2 += snprintf(fullkey + len2, len + 1 - len2, "%s_", fname);
+      }
+      len2 += snprintf(fullkey + len2, len + 1 - len2, "%s", key);
+      assert(len2 == len);
+
+      if (mp_lock(mp) == -1) {
+        logwarn("Cannot lock MP '%s' for metadata injection\n", mp->name);
+      } else {
+        ms = mp->streams;
+        while (ms) {
+          /* Send the meta data along with all streams
+           *
+           * XXX: This might create duplicates, but it's ok for now as old
+           * value get overwritten in the DB.
+           */
+          omlc_ms_send_metadata(ms, fullkey, value, type);
+          ms = ms->next;
+        }
+        mp_unlock(mp);
+
+        ret = 0;
+      }
+
+      xfree(fullkey);
+    }
+  }
+
+  return ret;
 }
 
 /** Called when the particular MS has been filled.
@@ -145,6 +218,62 @@ omlc_ms_process(OmlMStream *ms)
     // sample based filters fire
     filter_process(ms);
   }
+
+}
+
+/** Send some key/value metadata along on the given MS
+ *
+ * A lock for the MP containing that MS must be held before calling this
+ * function.
+ *
+ * Metadata is sent using schema 0, which has a key/value schema with two
+ * strings.
+ *
+ * TODO: Make this more generic by instantiating this schema by default for all
+ * MSs.
+ *
+ * \param ms pointer to the OmlMStream to send data over
+ * \param key ditto
+ * \param value OmlValueU containing the value
+ * \see filter_process
+ */
+static void
+omlc_ms_send_metadata(OmlMStream *ms, const char *key, const OmlValueU *value, OmlValueT type)
+{
+  struct timeval tv;
+  double now;
+  OmlWriter* writer;
+  OmlValue keyval[2];
+  OmlMStream mdms;
+
+  if (ms == NULL) return;
+
+  oml_value_array_init(keyval, 2);
+
+  /* XXX: Until the TODO above is addressed, we need to do that here. */
+  memset(&mdms, 0, sizeof(OmlMStream));
+  mdms.index = 0;
+  mdms.seq_no = ++ms->meta_seq_no;
+
+  writer = ms->writer;
+
+  /* From lib/client/filter.c:filter_process
+   * XXX: This should probably be factored into a more generic function called
+   * both by this function and filter_process
+   */
+  gettimeofday(&tv, NULL);
+  now = tv.tv_sec - omlc_instance->start_time + 0.000001 * tv.tv_usec;
+
+
+  oml_value_set_type(&keyval[0], OML_STRING_VALUE);
+  oml_value_from_s(&keyval[0], key);
+  oml_value_set(&keyval[1], value, type);
+
+  writer->row_start(writer, &mdms, now);
+  writer->out(writer, keyval, 2);
+  writer->row_end(writer, &mdms);
+
+  oml_value_reset(keyval);
 }
 
 /*
