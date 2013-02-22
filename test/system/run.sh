@@ -16,7 +16,7 @@
 # forensic inspection in case of failures.
 #
 # Can be run manually as
-#  top_builddir=../.. POSTGRES=`which postgres` TIMEOUT=`which timeout` VERSION=`git describe` ./run.sh
+#  srcdir=. top_builddir=../.. POSTGRES=`which postgres` TIMEOUT=`which timeout` VERSION=`git describe` ./run.sh
 
 backend=${1:-sq3}
 long=$2
@@ -68,7 +68,7 @@ sq3_extract() {
 	keys=$(sqlite3 $db 'SELECT key FROM _experiment_metadata' 2>>${dir}/db.log)
 	for k in $keys; do
 		echo -n " $k"
-		sqlite3 $db "SELECT value FROM _experiment_metadata WHERE key=$k" > ${dir}/s$k.meta 2>>${dir}/db.log
+		sqlite3 $db "SELECT value FROM _experiment_metadata WHERE key='$k'" > ${dir}/s$k.meta 2>>${dir}/db.log
 	done
 	echo "." >&2
 }
@@ -96,14 +96,15 @@ pg_extract() {
 	exp=$2
 	db=${exp}
 
-	PSQL_OPTS="-h localhost -p $PGPORT $db oml2 -P tuples_only=on"
+	PSQL_OPTS="-h localhost -p $PGPORT $db oml2 -P tuples_only=on -P format=unaligned"
 
 	echo -n "# $0 ($backend) extracting server-stored blobs from postgresql://localhost:$PGPORT $db:" >&2
 	seqs=$(${PGPATH}/psql ${PSQL_OPTS} -c 'SELECT oml_seq FROM blobgen_blobmp' 2>>${dir}/db.log)
 	for i in $seqs; do
 		echo -n " $i" >&2
-		echo -n `${PGPATH}/psql ${PSQL_OPTS} -c "SELECT blob FROM blobgen_blobmp WHERE oml_seq=$i" 2>>${dir}/db.log | \
-			sed "/^$/d;y/abcdef/ABCDEF/;s/ *\\\\\x//"` > ${dir}/s$i.hex
+		${PGPATH}/psql ${PSQL_OPTS} -c "SELECT blob FROM blobgen_blobmp WHERE oml_seq=$i" 2>>${dir}/db.log \
+			| sed "y/abcdef/ABCDEF/;s/ *\\\\\x//" \
+			> ${dir}/s$i.hex
 	done
 	echo "." >&2
 
@@ -111,7 +112,8 @@ pg_extract() {
 	keys=$(${PGPATH}/psql ${PSQL_OPTS} -c 'SELECT key FROM _experiment_metadata' 2>>${dir}/db.log)
 	for k in $keys; do
 		echo -n " $k"
-		${PGPATH}/psql ${PSQL_OPTS} -c "SELECT value FROM _experiment_metadata WHERE key=$k" 2>>${dir}/db.log
+		echo -n `${PGPATH}/psql ${PSQL_OPTS} -c "SELECT value FROM _experiment_metadata WHERE key='$k'"` \
+			> ${dir}/s$k.meta 2>>${dir}/db.log
 	done
 	echo "." >&2
 }

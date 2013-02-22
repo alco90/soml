@@ -144,7 +144,7 @@ meta_to_file (const char *key, const char *value)
     fclose (fd);
     exit (1);
   }
-  close (fd);
+  fclose (fd);
 }
 
 static OmlMPDef mpdef [] = {
@@ -171,7 +171,7 @@ run (void)
   /* Piggyback on v[0] which should later contain a string */
   omlc_set_string(v[0], "v1");
   omlc_inject_metadata(mp, "k1", &v[0], OML_STRING_VALUE, NULL); /* -> mymp_k1 = v1*/
-  meta_to_file("k1", "v1");
+  meta_to_file("blobmp_k1", "v1");
 
   gettimeofday(&beg, NULL);
   fprintf (stderr, "# blobgen: writing blobs:");
@@ -195,9 +195,10 @@ run (void)
 
   omlc_set_string(v[0], "v2");
   omlc_inject_metadata(mp, "k2", &v[0], OML_STRING_VALUE, "blob"); /* mymp_blob_k1 = v2 */
-  meta_to_file("k2", "v2");
-  omlc_inject_metadata(mp, "k1", &v[0], OML_STRING_VALUE, "blob"); /* This should overwrite the previous value of mymp_k1 */
-  meta_to_file("k1", "v2");
+  meta_to_file("blobmp_blob_k2", "v2");
+  /* This should overwrite the previous value of mymp_k1 */
+  omlc_inject_metadata(mp, "k1", &v[0], OML_STRING_VALUE, NULL);
+  meta_to_file("blobmp_k1", "v2");
 
   omlc_reset_string(v[0]);
   omlc_reset_blob(v[2]);
