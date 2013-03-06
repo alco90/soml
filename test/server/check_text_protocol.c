@@ -72,6 +72,7 @@ START_TEST(test_text_insert)
   int rc = -1;
 
   o_set_log_level(-1);
+  logdebug("%s\n", __FUNCTION__);
 
   /* Remove pre-existing databases */
   *dbname=0;
@@ -105,6 +106,7 @@ START_TEST(test_text_insert)
   /* Process the second sample */
   client_callback(&source, ch, s2, strlen(s2));
 
+  database_release(ch->database);
   check_server_destroy_client_handler(ch);
 
   logdebug("Checking recorded data in %s.sq3\n", domain);
@@ -164,6 +166,7 @@ START_TEST(test_text_flexibility)
   int rc = -1;
 
   o_set_log_level(-1);
+  logdebug("%s\n", __FUNCTION__);
 
   /* Remove pre-existing databases */
   *dbname=0;
@@ -193,7 +196,7 @@ START_TEST(test_text_flexibility)
   fail_if(ch->sender_id == 0);
   fail_if(ch->sender_name == NULL);
   fail_if(ch->app_name == NULL);
-  fail_unless(ch->table_count == 1, "Unexpected number of tables (%d instead of 1)", ch->table_count);
+  fail_unless(ch->table_count == 2, "Unexpected number of tables (%d instead of 2)", ch->table_count);
 
   logdebug("Sending first sample\n");
   snprintf(sample, sizeof(sample), "%f\t%d\t%d\t%d\n",
@@ -203,13 +206,13 @@ START_TEST(test_text_flexibility)
   client_callback(&source, ch, sample, strlen(sample));
 
   logdebug("Sending meta 'schema':'%s'\n", s2);
-  snprintf(sample, sizeof(sample), "%f\t%d\t%d\tschema\t%s\n",
-      /* time,  schema, sequence, schemadef */
-      time2,    0,      1,        s2
+  snprintf(sample, sizeof(sample), "%f\t%d\t%d\tschema\t%s\t%s\t%s\n",
+      /* time,  schema, sequence, schemadef,  mpname,   fname */
+      time2,    0,      1,        s2,         "",       ""
       );
   client_callback(&source, ch, sample, strlen(sample));
   fail_unless(ch->state == C_TEXT_DATA, "Inconsistent state: expected %d, got %d", C_TEXT_DATA, ch->state);
-  fail_unless(ch->table_count == 2, "Unexpected number of tables (%d instead of 2)", ch->table_count);
+  fail_unless(ch->table_count == 3, "Unexpected number of tables (%d instead of 3)", ch->table_count);
 
   logdebug("Sending second sample\n");
   snprintf(sample, sizeof(sample), "%f\t%d\t%d\t%d\n",
@@ -219,13 +222,13 @@ START_TEST(test_text_flexibility)
   client_callback(&source, ch, sample, strlen(sample));
 
   logdebug("Overwriting schema: '%s'\n", s3);
-  snprintf(sample, sizeof(sample), "%f\t%d\t%d\tschema\t%s\n",
-      /* time,  schema, sequence, schemadef */
-      time2,    0,      1,        s3 /* XXX: We should probably not ignore time or sequence */
+  snprintf(sample, sizeof(sample), "%f\t%d\t%d\tschema\t%s\t%s\t%s\n",
+      /* time,  schema, sequence, schemadef,  mpname, fname */
+      time2,    0,      1,        s3,         "",     ""
       );
   client_callback(&source, ch, sample, strlen(sample));
   fail_unless(ch->state == C_TEXT_DATA, "Inconsistent state: expected %d, got %d", C_TEXT_DATA, ch->state);
-  fail_unless(ch->table_count == 2, "Unexpected number of tables (%d instead of 2)", ch->table_count);
+  fail_unless(ch->table_count == 3, "Unexpected number of tables (%d instead of 3)", ch->table_count);
   fail_unless(ch->state == C_TEXT_DATA);
 
   logdebug("Sending third sample\n");
@@ -235,6 +238,7 @@ START_TEST(test_text_flexibility)
       );
   client_callback(&source, ch, sample, strlen(sample));
 
+  database_release(ch->database);
   check_server_destroy_client_handler(ch);
 
   logdebug("Checking recorded data in %s.sq3\n", domain);
@@ -288,20 +292,26 @@ START_TEST(test_text_metadata)
   char dbname[sizeof(domain)+3];
   char table[3][12] = { "meta1_table" };
   double time1 = 1.096202;
+#if DB_HAS_PKEY /* #814 */
   double time2 = 2.092702;
+  char f1[] = "size";
+#endif
   char k1[] = "key1";
   char v1[] = "val1";
   char k2[] = "key2";
   char v2[] = "val2";
+  char *mp1 = table[1];
 
-  char h[200];
+  char h[400];
+  char s0[] = "0 _experiment_metadata key:string value:string mpname:string fname:string";
   char s1[200];
   char sample[200];
   char select[200];
 
   int rc = -1;
 
-  o_set_log_level(2);
+  o_set_log_level(-1);
+  logdebug("%s\n", __FUNCTION__);
 
   /* Remove pre-existing databases */
   *dbname=0;
@@ -309,8 +319,9 @@ START_TEST(test_text_metadata)
   unlink(dbname);
 
   snprintf(s1, sizeof(s1), "1 %s size:uint32", table[0]);
-  snprintf(h, sizeof(h),  "protocol: 4\ndomain: %s\nstart-time: 1332132092\nsender-id: %s\napp-name: %s\ncontent: text\nschema: %s\n\n", domain, basename(__FILE__), __FUNCTION__, s1);
-  snprintf(select, sizeof(select), "select key, value from _experiment_metadata;");
+  snprintf(h, sizeof(h),  "protocol: 4\ndomain: %s\nstart-time: 1332132092\nsender-id: %s\napp-name: %s\nschema: %s\ncontent: text\nschema: %s\n\n",
+      domain, basename(__FILE__), __FUNCTION__, s0, s1);
+  snprintf(select, sizeof(select), "select key, value, mpname, fname from _experiment_metadata;");
 
   memset(&source, 0, sizeof(SockEvtSource));
   source.name = "text meta socket";
@@ -327,34 +338,35 @@ START_TEST(test_text_metadata)
   fail_if(ch->sender_id == 0);
   fail_if(ch->sender_name == NULL);
   fail_if(ch->app_name == NULL);
-  fail_unless(ch->table_count == 1, "Unexpected number of tables (%d instead of 1)", ch->table_count);
+  fail_unless(ch->table_count == 2, "Unexpected number of tables (%d instead of 2)", ch->table_count);
 
   logdebug("Sending first meta '%s':'%s'\n", k1, v1);
-  snprintf(sample, sizeof(sample), "%f\t%d\t%d\t%s\t%s\n",
-      /* time,  schema, sequence, key, value */
-      time1,    0,      1,        k1,  v1
+  snprintf(sample, sizeof(sample), "%f\t%d\t%d\t%s\t%s\t%s\t%s\n",
+      /* time,  schema, sequence, key, value, mpname,   fname */
+      time1,    0,      1,        k1,  v1,    "",       ""
       );
   client_callback(&source, ch, sample, strlen(sample));
   fail_unless(ch->state == C_TEXT_DATA, "Inconsistent state: expected %d, got %d", C_TEXT_DATA, ch->state);
 
   logdebug("Sending second meta '%s':'%s'\n", k2, v2);
-  snprintf(sample, sizeof(sample), "%f\t%d\t%d\t%s\t%s\n",
-      /* time,  schema, sequence, key, value */
-      time1,    0,      1,        k2,  v2
+  snprintf(sample, sizeof(sample), "%f\t%d\t%d\t%s\t%s\t%s\t%s\n",
+      /* time,  schema, sequence, key, value, mpname,   fname */
+      time1,    0,      2,        k2,  v2,    mp1,       ""
       );
   client_callback(&source, ch, sample, strlen(sample));
   fail_unless(ch->state == C_TEXT_DATA, "Inconsistent state: expected %d, got %d", C_TEXT_DATA, ch->state);
 
 #if DB_HAS_PKEY /* #814 */
   logdebug("Sending third meta '%s':'%s'\n", k1, v2);
-  snprintf(sample, sizeof(sample), "%f\t%d\t%d\t%s\t%s\n",
-      /* time,  schema, sequence, key, value */
-      time1,    0,      1,        k1,  v2
+  snprintf(sample, sizeof(sample), "%f\t%d\t%d\t%s\t%s\t%s\t%s\n",
+      /* time,  schema, sequence, key, value, mpname,   fname */
+      time1,    0,      3,        k1,  v2,    mp1,      f1
       );
   client_callback(&source, ch, sample, strlen(sample));
   fail_unless(ch->state == C_TEXT_DATA, "Inconsistent state: expected %d, got %d", C_TEXT_DATA, ch->state);
 #endif
 
+  database_release(ch->database);
   check_server_destroy_client_handler(ch);
 
   logdebug("Checking recorded data in %s.sq3\n", domain);
@@ -366,35 +378,42 @@ START_TEST(test_text_metadata)
   fail_unless(rc == 0, "Preparation of statement `%s' failed; rc=%d", select, rc);
   rc = sqlite3_step(stmt);
   rc = sqlite3_step(stmt); /* Skip start_time */
-#if DB_HAS_SCHEMA_META /* # 1017 */
   rc = sqlite3_step(stmt); /* Skip schema */
-#endif
   fail_unless(rc == 100, "First steps of statement `%s' failed; rc=%d", select, rc);
-  fail_if(strcmp(k1, sqlite3_column_text(stmt, 0)),
+  fail_if(strcmp(k1, (const char*)sqlite3_column_text(stmt, 0)),
       "Invalid 1st key in metadata table: expected `%s', got `%s'",
-      k1, sqlite3_column_text(stmt, 0));
-  fail_if(strcmp(v1, sqlite3_column_text(stmt, 1)),
+      k1, (const char*)sqlite3_column_text(stmt, 0));
+  fail_if(strcmp(v1, (const char*)sqlite3_column_text(stmt, 1)),
       "Invalid 1st value in metadata table: expected `%s', got `%s'",
-      v1, sqlite3_column_text(stmt, 1));
+      v1, (const char*)sqlite3_column_text(stmt, 1));
 
   rc = sqlite3_step(stmt);
   fail_unless(rc == 100, "Second step of statement `%s' failed; rc=%d", select, rc);
-  fail_if(strcmp(k2, sqlite3_column_text(stmt, 0)),
+  fail_if(strcmp(k2, (const char*)sqlite3_column_text(stmt, 0)),
       "Invalid 2nd key in metadata table: expected `%s', got `%s'",
-      k2, sqlite3_column_text(stmt, 0));
-  fail_if(strcmp(v2, sqlite3_column_text(stmt, 1)),
+      k2, (const char*)sqlite3_column_text(stmt, 0));
+  fail_if(strcmp(v2, (const char*)sqlite3_column_text(stmt, 1)),
       "Invalid 2nd value in metadata table: expected `%s', got `%s'",
-      v2, sqlite3_column_text(stmt, 1));
+      v2, (const char*)sqlite3_column_text(stmt, 1));
+  fail_if(strcmp(mp1, (const char*)sqlite3_column_text(stmt, 2)),
+      "Invalid 2nd mpname in metadata table: expected `%s', got `%s'",
+      mp1, (const char*)sqlite3_column_text(stmt, 2));
 
 #if DB_HAS_PKEY /* #814 */
   rc = sqlite3_step(stmt);
   fail_unless(rc == 100, "Second step of statement `%s' failed; rc=%d", select, rc);
-  fail_if(strcmp(k1, sqlite3_column_text(stmt, 0)),
+  fail_if(strcmp(k1, (const char*)sqlite3_column_text(stmt, 0)),
       "Invalid 3rd key in metadata table: expected `%s', got `%s'",
-      k1, sqlite3_column_text(stmt, 0));
-  fail_if(strcmp(v2, sqlite3_column_text(stmt, 1)),
+      k1, (const char*)sqlite3_column_text(stmt, 0));
+  fail_if(strcmp(v2, (const char*)sqlite3_column_text(stmt, 1)),
       "Invalid 3rd value in metadata table: expected `%s', got `%s'",
-      v2, sqlite3_column_text(stmt, 1));
+      v2, (const char*)sqlite3_column_text(stmt, 1));
+  fail_if(strcmp(mp1, (const char*)sqlite3_column_text(stmt, 2)),
+      "Invalid 3rd mpname in metadata table: expected `%s', got `%s'",
+      mp1, (const char*)sqlite3_column_text(stmt, 2));
+  fail_if(strcmp(f1, (const char*)sqlite3_column_text(stmt, 3)),
+      "Invalid 3rd fname in metadata table: expected `%s', got `%s'",
+      f1, (const char*)sqlite3_column_text(stmt, 2));
 #endif
 
   database_release(db);
