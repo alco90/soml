@@ -38,7 +38,8 @@
 #include "client.h"
 
 static void omlc_ms_process(OmlMStream* ms);
-static void omlc_ms_send_metadata(OmlMStream *ms, const char *key, const OmlValueU *value, OmlValueT type);
+
+extern OmlMP* schema0;
 
 /** DEPRECATED
  * \see omlc_inject
@@ -105,11 +106,6 @@ omlc_inject(OmlMP *mp, OmlValueU *values)
 
 /** Inject metadata (key/value) for a specific MP.
  *
- * With the current storage backends, the key will be a concatenation following
- * this pattern: MPNAME_[FIELDNAME_]KEY. This transformation is done on the
- * client's side. Additionally any later injection of metadata in an already
- * existing key will override its provious value.
- *
  * \param mp pointer to the OmlMP to which the metadata relates
  * \param key base name for the key (keys are unique)
  * \param value OmlValueU containing the value for the given key
@@ -122,12 +118,11 @@ omlc_inject(OmlMP *mp, OmlValueU *values)
 int
 omlc_inject_metadata(OmlMP *mp, const char *key, const OmlValueU *value, OmlValueT type, const char *fname)
 {
-  char *fullkey;
-  int len, len2;
   int i, ret = -1;
 
-  OmlMPDef *f;
-  OmlMStream *ms;
+  OmlValueU v[4];
+  omlc_zero_array(v, sizeof(4));
+  MString *namestr = mstring_create();
 
   if (omlc_instance == NULL) {
     logerror("Cannot inject metadata until omlc_start has been called\n");
@@ -144,56 +139,36 @@ omlc_inject_metadata(OmlMP *mp, const char *key, const OmlValueU *value, OmlValu
   } else {
     assert(mp->name);
 
-    len = strlen(key);
+    omlc_set_string_copy(v[0], key, strlen(key)); /* Not sure where this one comes from; duplicate */
+    omlc_copy_string(v[1], *value);
+    /* XXX: At the moment, MS are named as APPNAME_MPNAME.
+     * Be consistent with it here, until #1055 is addressed */
+    mstring_set (namestr, omlc_instance->app_name);
+    mstring_cat (namestr, "_");
+    mstring_cat (namestr, mp->name);
+    omlc_set_string_copy(v[2], mstring_buf(namestr), mstring_len(namestr));
+    omlc_reset_string(v[3]); /* Set a null pointer */
+    mstring_delete(namestr);
     if (fname) {
       /* Make sure fname exists in this MP */
       /* XXX: This should probably be done in another function (returning the OmlMPDef? */
-      f = mp->param_defs;
-      loginfo("%s %d\n", fname, mp->param_count);
-      for (i = 0; (i < mp->param_count) && strcmp(f[i].name, fname); i++) {
-        loginfo("%s\n", f[i].name);
-      }
+      for (i = 0; (i < mp->param_count) && strcmp(mp->param_defs[i].name, fname); i++);
       if (i >= mp->param_count) {
-        logerror("Field %s not found in MP %s\n", fname, mp->name);
-        return -1; /* XXX: It would be too messy to try to get to the end return from here */
-      }
-
-      len += strlen(fname) + 1; /* '_' */
-    }
-    len += strlen(mp->name) + 1; /* '_' */
-
-    fullkey = xmalloc(len + 1);
-    if (!fullkey) {
-      logerror("Cannot allocate memory for full key name\n");
-
-    } else {
-      len2 = snprintf(fullkey, len + 1, "%s_", mp->name);
-      if (fname) {
-        len2 += snprintf(fullkey + len2, len + 1 - len2, "%s_", fname);
-      }
-      len2 += snprintf(fullkey + len2, len + 1 - len2, "%s", key);
-      assert(len2 == len);
-
-      if (mp_lock(mp) == -1) {
-        logwarn("Cannot lock MP '%s' for metadata injection\n", mp->name);
+        logerror("Field %s not found in MP %s, not reporting\n", fname, mp->name);
       } else {
-        ms = mp->streams;
-        while (ms) {
-          /* Send the meta data along with all streams
-           *
-           * XXX: This might create duplicates, but it's ok for now as old
-           * value get overwritten in the DB.
-           */
-          omlc_ms_send_metadata(ms, fullkey, value, type);
-          ms = ms->next;
-        }
-        mp_unlock(mp);
-
-        ret = 0;
+        /* Let's use a value we know to be static */
+        omlc_set_string(v[3], mp->param_defs[i].name);
       }
-
-      xfree(fullkey);
     }
+
+    omlc_inject(schema0, v);
+
+    omlc_reset_string(v[0]);
+    omlc_reset_string(v[1]);
+    omlc_reset_string(v[2]);
+    omlc_reset_string(v[3]);
+
+    ret = 0;
   }
 
   return ret;
@@ -219,61 +194,6 @@ omlc_ms_process(OmlMStream *ms)
     filter_process(ms);
   }
 
-}
-
-/** Send some key/value metadata along on the given MS
- *
- * A lock for the MP containing that MS must be held before calling this
- * function.
- *
- * Metadata is sent using schema 0, which has a key/value schema with two
- * strings.
- *
- * TODO: Make this more generic by instantiating this schema by default for all
- * MSs.
- *
- * \param ms pointer to the OmlMStream to send data over
- * \param key ditto
- * \param value OmlValueU containing the value
- * \see filter_process
- */
-static void
-omlc_ms_send_metadata(OmlMStream *ms, const char *key, const OmlValueU *value, OmlValueT type)
-{
-  struct timeval tv;
-  double now;
-  OmlWriter* writer;
-  OmlValue keyval[2];
-  OmlMStream mdms;
-
-  if (ms == NULL) return;
-
-  oml_value_array_init(keyval, 2);
-
-  /* XXX: Until the TODO above is addressed, we need to do that here. */
-  memset(&mdms, 0, sizeof(OmlMStream));
-  mdms.index = 0;
-  mdms.seq_no = ++ms->meta_seq_no;
-
-  writer = ms->writer;
-
-  /* From lib/client/filter.c:filter_process
-   * XXX: This should probably be factored into a more generic function called
-   * both by this function and filter_process
-   */
-  gettimeofday(&tv, NULL);
-  now = tv.tv_sec - omlc_instance->start_time + 0.000001 * tv.tv_usec;
-
-
-  oml_value_set_type(&keyval[0], OML_STRING_VALUE);
-  oml_value_from_s(&keyval[0], key);
-  oml_value_set(&keyval[1], value, type);
-
-  writer->row_start(writer, &mdms, now);
-  writer->out(writer, keyval, 2);
-  writer->row_end(writer, &mdms);
-
-  oml_value_reset(keyval);
 }
 
 /*
