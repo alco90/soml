@@ -147,7 +147,11 @@ omlc_inject_metadata(OmlMP *mp, const char *key, const OmlValueU *value, OmlValu
     mstring_cat (namestr, "_");
     mstring_cat (namestr, mp->name);
     omlc_set_string_copy(v[2], mstring_buf(namestr), mstring_len(namestr));
-    omlc_reset_string(v[3]); /* Set a null pointer */
+    /* Set a null pointer
+     * XXX: This should work, but doesn't.
+    omlc_reset_string(v[3]);
+     */
+    omlc_set_const_string(v[3], "");
     mstring_delete(namestr);
     if (fname) {
       /* Make sure fname exists in this MP */
