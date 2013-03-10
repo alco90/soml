@@ -68,12 +68,13 @@ sq3_extract() {
 	keys=$(sqlite3 $db 'SELECT key FROM _experiment_metadata' 2>>${dir}/db.log)
 	for k in $keys; do
 		echo -n " $k"
-		sqlite3 $db "SELECT value FROM _experiment_metadata WHERE key='$k'" > ${dir}/s$k.meta 2>>${dir}/db.log
+		sqlite3 $db "SELECT value, mpname, fname FROM _experiment_metadata WHERE key='$k'" > ${dir}/s$k.meta 2>>${dir}/db.log
 	done
 	echo "." >&2
 }
 
 ## PostgreSQL functions
+# To debug: postgres --single -D db blobgen
 # Some more specific variables
 PGPATH=`dirname ${POSTGRES} 2>/dev/null`
 PGPORT=$((RANDOM + 32766))
@@ -112,7 +113,7 @@ pg_extract() {
 	keys=$(${PGPATH}/psql ${PSQL_OPTS} -c 'SELECT key FROM _experiment_metadata' 2>>${dir}/db.log)
 	for k in $keys; do
 		echo -n " $k"
-		echo -n `${PGPATH}/psql ${PSQL_OPTS} -c "SELECT value FROM _experiment_metadata WHERE key='$k'"` \
+		${PGPATH}/psql ${PSQL_OPTS} -c "SELECT value, mpname, fname FROM _experiment_metadata WHERE key='$k'" \
 			> ${dir}/s$k.meta 2>>${dir}/db.log
 	done
 	echo "." >&2

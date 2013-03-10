@@ -124,20 +124,20 @@ double difftv(struct timeval t1, struct timeval t2)
 }
 
 void
-meta_to_file (const char *key, const char *value)
+meta_to_file (const char *key, const char *value, const char *mpname, const char *fname)
 {
   char s[64];
   FILE *fd;
   int result;
 
   snprintf (s, sizeof(s), "g%s.meta", key);
-  fd = fopen (s, "w");
+  fd = fopen (s, "a");
   if (fd == NULL) {
     fprintf (stderr, "# blobgen: could not open file %s: %s\n", s, strerror (errno));
     exit (1);
   }
 
-  result = fprintf (fd, "%s", value);
+  result = fprintf (fd, "%s|%s|%s\n", value, mpname, fname?fname:"");
 
   if (result < 0) {
     fprintf (stderr, "# blobgen: writing meta to file: %s\n", strerror (errno));
@@ -170,8 +170,8 @@ run (void)
 
   /* Piggyback on v[0] which should later contain a string */
   omlc_set_string(v[0], "v1");
-  omlc_inject_metadata(mp, "k1", &v[0], OML_STRING_VALUE, NULL); /* -> mymp_k1 = v1*/
-  meta_to_file("blobmp_k1", "v1");
+  omlc_inject_metadata(mp, "k1", &v[0], OML_STRING_VALUE, NULL);
+  meta_to_file("k1", "v1", "blobgen_blobmp", NULL);
 
   gettimeofday(&beg, NULL);
   fprintf (stderr, "# blobgen: writing blobs:");
@@ -194,11 +194,11 @@ run (void)
       (double)i/deltaT, (double)totlength/deltaT);
 
   omlc_set_string(v[0], "v2");
-  omlc_inject_metadata(mp, "k2", &v[0], OML_STRING_VALUE, "blob"); /* mymp_blob_k1 = v2 */
-  meta_to_file("blobmp_blob_k2", "v2");
+  omlc_inject_metadata(mp, "k2", &v[0], OML_STRING_VALUE, "blob");
+  meta_to_file("k2", "v2", "blobgen_blobmp", "blob");
   /* This should overwrite the previous value of mymp_k1 */
   omlc_inject_metadata(mp, "k1", &v[0], OML_STRING_VALUE, NULL);
-  meta_to_file("blobmp_k1", "v2");
+  meta_to_file("k1", "v2", "blobgen_blobmp", NULL);
 
   omlc_reset_string(v[0]);
   omlc_reset_blob(v[2]);
