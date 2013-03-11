@@ -137,10 +137,18 @@ meta_to_file (const char *key, const char *value, const char *mpname, const char
     exit (1);
   }
 
-  result = fprintf (fd, "%s|%s|%s\n", value, mpname, fname?fname:"");
+  if (NULL == mpname) {         /* Nothing */
+    result = fprintf (fd, ".|%s\n", value);
+
+  } else if (NULL == fname) {	/* Just mpname */
+    result = fprintf (fd, ".blobgen_%s|%s\n", mpname, value); /* Currently, the library prefixes the application name...
+                                                               * See #1055 */
+  } else {		        /* Everything */
+    result = fprintf (fd, ".blobgen_%s.%s|%s\n", mpname, fname, value);
+  }
 
   if (result < 0) {
-    fprintf (stderr, "# blobgen: writing meta to file: %s\n", strerror (errno));
+    fprintf (stderr, "# blobgen: error writing meta to file: %s\n", strerror (errno));
     fclose (fd);
     exit (1);
   }
@@ -171,7 +179,7 @@ run (void)
   /* Piggyback on v[0] which should later contain a string */
   omlc_set_string(v[0], "v1");
   omlc_inject_metadata(mp, "k1", &v[0], OML_STRING_VALUE, NULL);
-  meta_to_file("k1", "v1", "blobgen_blobmp", NULL);
+  meta_to_file("k1", "v1", "blobmp", NULL);
 
   gettimeofday(&beg, NULL);
   fprintf (stderr, "# blobgen: writing blobs:");
@@ -195,10 +203,9 @@ run (void)
 
   omlc_set_string(v[0], "v2");
   omlc_inject_metadata(mp, "k2", &v[0], OML_STRING_VALUE, "blob");
-  meta_to_file("k2", "v2", "blobgen_blobmp", "blob");
-  /* This should overwrite the previous value of mymp_k1 */
+  meta_to_file("k2", "v2", "blobmp", "blob");
   omlc_inject_metadata(mp, "k1", &v[0], OML_STRING_VALUE, NULL);
-  meta_to_file("k1", "v2", "blobgen_blobmp", NULL);
+  meta_to_file("k1", "v2", "blobmp", NULL);
 
   omlc_reset_string(v[0]);
   omlc_reset_blob(v[2]);
