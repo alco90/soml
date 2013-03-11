@@ -24,7 +24,7 @@ static struct {
 } meta_tables[] = {
   { .name = "_experiment_metadata",
     .sql = NULL,
-    .schema = "0 _experiment_metadata key:string value:string mpname:string fname:string",
+    .schema = "0 _experiment_metadata subject:string key:string value:string",
   },
   { .name = "_senders",
     .sql = "CREATE TABLE _senders (name TEXT PRIMARY KEY, id INTEGER UNIQUE);",
