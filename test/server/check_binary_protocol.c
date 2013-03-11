@@ -240,8 +240,8 @@ START_TEST(test_binary_flexibility)
   char select2[200];
   char select3[200];
 
-  OmlValue v[4];
-  oml_value_array_init(v, 4);
+  OmlValue v[3];
+  oml_value_array_init(v, 3);
 
   int rc = -1;
 
@@ -294,14 +294,12 @@ START_TEST(test_binary_flexibility)
   oml_value_set_type(&v[0], OML_STRING_VALUE);
   oml_value_set_type(&v[1], OML_STRING_VALUE);
   oml_value_set_type(&v[2], OML_STRING_VALUE);
-  oml_value_set_type(&v[3], OML_STRING_VALUE);
-  omlc_set_const_string(*oml_value_get_value(&v[0]), "schema");
-  omlc_set_const_string(*oml_value_get_value(&v[1]), s2);
-  omlc_reset_string(*oml_value_get_value(&v[2]));
-  omlc_reset_string(*oml_value_get_value(&v[3]));
-  marshal_values(mbuf, v, 4);
+  omlc_set_const_string(*oml_value_get_value(&v[0]), ".");
+  omlc_set_const_string(*oml_value_get_value(&v[1]), "schema");
+  omlc_set_const_string(*oml_value_get_value(&v[2]), s2);
+  marshal_values(mbuf, v, 3);
   marshal_finalize(mbuf);
-  oml_value_array_reset(v, 4);
+  oml_value_array_reset(v, 3);
   printmbuf(mbuf);
   client_callback(&source, ch, mbuf_buffer(mbuf), mbuf_fill(mbuf));
   fail_unless(ch->state == C_BINARY_DATA, "Inconsistent state: expected %d, got %d", C_BINARY_DATA, ch->state);
@@ -324,14 +322,12 @@ START_TEST(test_binary_flexibility)
   oml_value_set_type(&v[0], OML_STRING_VALUE);
   oml_value_set_type(&v[1], OML_STRING_VALUE);
   oml_value_set_type(&v[2], OML_STRING_VALUE);
-  oml_value_set_type(&v[3], OML_STRING_VALUE);
-  omlc_set_const_string(*oml_value_get_value(&v[0]), "schema");
-  omlc_set_const_string(*oml_value_get_value(&v[1]), s3);
-  omlc_reset_string(*oml_value_get_value(&v[2]));
-  omlc_reset_string(*oml_value_get_value(&v[3]));
-  marshal_values(mbuf, v, 4);
+  omlc_set_const_string(*oml_value_get_value(&v[0]), ".");
+  omlc_set_const_string(*oml_value_get_value(&v[1]), "schema");
+  omlc_set_const_string(*oml_value_get_value(&v[2]), s3);
+  marshal_values(mbuf, v, 3);
   marshal_finalize(mbuf);
-  oml_value_array_reset(v, 4);
+  oml_value_array_reset(v, 3);
   printmbuf(mbuf);
   client_callback(&source, ch, mbuf_buffer(mbuf), mbuf_fill(mbuf));
   fail_unless(ch->state == C_BINARY_DATA, "Inconsistent state: expected %d, got %d", C_BINARY_DATA, ch->state);
@@ -412,16 +408,17 @@ START_TEST(test_binary_metadata)
   char k2[] = "key2";
   char v2[] = "val2";
   char *mp1 = table[1];
+  char subject[10];
 
   char h[400];
-  char s0[] = "0 _experiment_metadata key:string value:string mpname:string fname:string";
+  char s0[] = "0 _experiment_metadata subject:string key:string value:string";
   char s1[200];
   char select[200];
 
   int rc = -1;
 
-  OmlValue v[4];
-  oml_value_array_init(v, 4);
+  OmlValue v[3];
+  oml_value_array_init(v, 3);
 
   /* Remove pre-existing databases */
   *dbname=0;
@@ -434,7 +431,7 @@ START_TEST(test_binary_metadata)
   snprintf(s1, sizeof(s1), "1 %s size:uint32", table[0]);
   snprintf(h, sizeof(h),  "protocol: 4\ndomain: %s\nstart-time: 1332132092\nsender-id: %s\napp-name: %s\nschema: %s\ncontent: binary\nschema: %s\n\n",
       domain, basename(__FILE__), __FUNCTION__, s0, s1);
-  snprintf(select, sizeof(select), "select key, value, mpname, fname from _experiment_metadata;");
+  snprintf(select, sizeof(select), "select key, value, subject from _experiment_metadata;");
 
   memset(&source, 0, sizeof(SockEvtSource));
   source.name = "bin meta socket";
@@ -453,60 +450,60 @@ START_TEST(test_binary_metadata)
   fail_if(ch->app_name == NULL);
   fail_unless(ch->table_count == 2, "Unexpected number of tables (%d instead of 2)", ch->table_count);
 
-  logdebug("Sending first meta '%s':'%s'\n", k1, v1);
+  *subject=0;
+
+  strcat(subject, ".");
+  logdebug("Sending first meta '%s %s %s'\n", subject, k1, v1);
   mbuf_clear(mbuf);
   marshal_init(mbuf, OMB_DATA_P);
   marshal_measurements(mbuf, 0, 1, time1);
   oml_value_set_type(&v[0], OML_STRING_VALUE);
   oml_value_set_type(&v[1], OML_STRING_VALUE);
   oml_value_set_type(&v[2], OML_STRING_VALUE);
-  oml_value_set_type(&v[3], OML_STRING_VALUE);
-  omlc_set_const_string(*oml_value_get_value(&v[0]), k1);
-  omlc_set_const_string(*oml_value_get_value(&v[1]), v1);
-  omlc_reset_string(*oml_value_get_value(&v[2]));
-  omlc_reset_string(*oml_value_get_value(&v[3]));
-  marshal_values(mbuf, v, 4);
+  omlc_set_const_string(*oml_value_get_value(&v[0]), subject);
+  omlc_set_const_string(*oml_value_get_value(&v[1]), k1);
+  omlc_set_const_string(*oml_value_get_value(&v[2]), v1);
+  marshal_values(mbuf, v, 3);
   marshal_finalize(mbuf);
-  oml_value_array_reset(v, 4);
+  oml_value_array_reset(v, 3);
   printmbuf(mbuf);
   client_callback(&source, ch, mbuf_buffer(mbuf), mbuf_fill(mbuf));
   fail_unless(ch->state == C_BINARY_DATA, "Inconsistent state: expected %d, got %d", C_BINARY_DATA, ch->state);
 
-  logdebug("Sending second meta '%s':'%s'\n", k2, v2);
+  logdebug("Sending second meta '%s %s %s'\n", subject, k2, v2);
+  strcat(subject, mp1);
   mbuf_clear(mbuf);
   marshal_init(mbuf, OMB_DATA_P);
   marshal_measurements(mbuf, 0, 1, time1);
   oml_value_set_type(&v[0], OML_STRING_VALUE);
   oml_value_set_type(&v[1], OML_STRING_VALUE);
   oml_value_set_type(&v[2], OML_STRING_VALUE);
-  oml_value_set_type(&v[3], OML_STRING_VALUE);
-  omlc_set_const_string(*oml_value_get_value(&v[0]), k2);
-  omlc_set_const_string(*oml_value_get_value(&v[1]), v2);
-  omlc_set_const_string(*oml_value_get_value(&v[2]), mp1);
-  omlc_reset_string(*oml_value_get_value(&v[3]));
-  marshal_values(mbuf, v, 4);
+  omlc_set_const_string(*oml_value_get_value(&v[0]), subject);
+  omlc_set_const_string(*oml_value_get_value(&v[1]), k2);
+  omlc_set_const_string(*oml_value_get_value(&v[2]), v2);
+  marshal_values(mbuf, v, 3);
   marshal_finalize(mbuf);
-  oml_value_array_reset(v, 4);
+  oml_value_array_reset(v, 3);
   printmbuf(mbuf);
   client_callback(&source, ch, mbuf_buffer(mbuf), mbuf_fill(mbuf));
   fail_unless(ch->state == C_BINARY_DATA, "Inconsistent state: expected %d, got %d", C_BINARY_DATA, ch->state);
 
 #if DB_HAS_PKEY /* #814 */
-  logdebug("Sending third meta '%s':'%s'\n", k1, v2);
+  logdebug("Sending third meta '%s %s %s'\n", subject, k1, v2);
+  strcat(subject, ".");
+  strcat(subject, f1);
   mbuf_clear(mbuf);
   marshal_init(mbuf, OMB_DATA_P);
   marshal_measurements(mbuf, 0, 1, time1);
   oml_value_set_type(&v[0], OML_STRING_VALUE);
   oml_value_set_type(&v[1], OML_STRING_VALUE);
   oml_value_set_type(&v[2], OML_STRING_VALUE);
-  oml_value_set_type(&v[3], OML_STRING_VALUE);
-  omlc_set_const_string(*oml_value_get_value(&v[0]), k1);
-  omlc_set_const_string(*oml_value_get_value(&v[1]), v2);
-  omlc_set_const_string(*oml_value_get_value(&v[2]), mp1);
-  omlc_set_const_string(*oml_value_get_value(&v[3]), f1);
-  marshal_values(mbuf, v, 4);
+  omlc_set_const_string(*oml_value_get_value(&v[0]), subject);
+  omlc_set_const_string(*oml_value_get_value(&v[1]), k1);
+  omlc_set_const_string(*oml_value_get_value(&v[2]), v1);
+  marshal_values(mbuf, v, 3);
   marshal_finalize(mbuf);
-  oml_value_array_reset(v, 4);
+  oml_value_array_reset(v, 3);
   printmbuf(mbuf);
   client_callback(&source, ch, mbuf_buffer(mbuf), mbuf_fill(mbuf));
   fail_unless(ch->state == C_BINARY_DATA, "Inconsistent state: expected %d, got %d", C_BINARY_DATA, ch->state);
@@ -521,11 +518,15 @@ START_TEST(test_binary_metadata)
   db = database_find(domain);
   fail_if(db == NULL || ((Sq3DB*)(db->handle))->conn == NULL , "Cannot open SQLite3 database");
 
+  *subject=0;
+
+  strcat(subject, ".");
   rc = sqlite3_prepare_v2(((Sq3DB*)(db->handle))->conn, select, -1, &stmt, 0);
   fail_unless(rc == 0, "Preparation of statement `%s' failed; rc=%d", select, rc);
   rc = sqlite3_step(stmt);
   rc = sqlite3_step(stmt); /* Skip start_time */
-  rc = sqlite3_step(stmt); /* Skip schema */
+  rc = sqlite3_step(stmt); /* Skip schema 0 */
+  rc = sqlite3_step(stmt); /* Skip schema 1 */
   fail_unless(rc == 100, "First steps of statement `%s' failed; rc=%d", select, rc);
   fail_if(strcmp(k1, (const char*)sqlite3_column_text(stmt, 0)),
       "Invalid 1st key in metadata table: expected `%s', got `%s'",
@@ -533,7 +534,11 @@ START_TEST(test_binary_metadata)
   fail_if(strcmp(v1, (const char*)sqlite3_column_text(stmt, 1)),
       "Invalid 1st value in metadata table: expected `%s', got `%s'",
       v1, (const char*)sqlite3_column_text(stmt, 1));
+  fail_if(strcmp(subject, (const char*)sqlite3_column_text(stmt, 2)),
+      "Invalid 1st subject in metadata table: expected `%s', got `%s'",
+      subject, (const char*)sqlite3_column_text(stmt, 1));
 
+  strcat(subject, mp1);
   rc = sqlite3_step(stmt);
   fail_unless(rc == 100, "Second step of statement `%s' failed; rc=%d", select, rc);
   fail_if(strcmp(k2, (const char*)sqlite3_column_text(stmt, 0)),
@@ -542,11 +547,13 @@ START_TEST(test_binary_metadata)
   fail_if(strcmp(v2, (const char*)sqlite3_column_text(stmt, 1)),
       "Invalid 2nd value in metadata table: expected `%s', got `%s'",
       v2, (const char*)sqlite3_column_text(stmt, 1));
-  fail_if(strcmp(mp1, (const char*)sqlite3_column_text(stmt, 2)),
-      "Invalid 2nd mpname in metadata table: expected `%s', got `%s'",
-      mp1, (const char*)sqlite3_column_text(stmt, 2));
+  fail_if(strcmp(subject, (const char*)sqlite3_column_text(stmt, 2)),
+      "Invalid 2nd subject in metadata table: expected `%s', got `%s'",
+      subject, (const char*)sqlite3_column_text(stmt, 1));
 
 #if DB_HAS_PKEY /* #814 */
+  strcat(subject, ".");
+  strcat(subject, f1);
   rc = sqlite3_step(stmt);
   fail_unless(rc == 100, "Second step of statement `%s' failed; rc=%d", select, rc);
   fail_if(strcmp(k1, (const char*)sqlite3_column_text(stmt, 0)),
@@ -555,12 +562,9 @@ START_TEST(test_binary_metadata)
   fail_if(strcmp(v2, (const char*)sqlite3_column_text(stmt, 1)),
       "Invalid 3rd value in metadata table: expected `%s', got `%s'",
       v2, (const char*)sqlite3_column_text(stmt, 1));
-  fail_if(strcmp(mp1, (const char*)sqlite3_column_text(stmt, 2)),
-      "Invalid 3rd mpname in metadata table: expected `%s', got `%s'",
-      mp1, (const char*)sqlite3_column_text(stmt, 2));
-  fail_if(strcmp(f1, (const char*)sqlite3_column_text(stmt, 3)),
-      "Invalid 3rd fname in metadata table: expected `%s', got `%s'",
-      f1, (const char*)sqlite3_column_text(stmt, 2));
+  fail_if(strcmp(subject, (const char*)sqlite3_column_text(stmt, 2)),
+      "Invalid 3rd subject in metadata table: expected `%s', got `%s'",
+      subject, (const char*)sqlite3_column_text(stmt, 1));
 #endif
 
   database_release(db);
