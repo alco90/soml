@@ -120,9 +120,9 @@ omlc_inject_metadata(OmlMP *mp, const char *key, const OmlValueU *value, OmlValu
 {
   int i, ret = -1;
 
-  OmlValueU v[4];
-  omlc_zero_array(v, sizeof(4));
-  MString *namestr = mstring_create();
+  OmlValueU v[3];
+  omlc_zero_array(v, 3);
+  MString *subject = mstring_create();
 
   if (omlc_instance == NULL) {
     logerror("Cannot inject metadata until omlc_start has been called\n");
@@ -139,34 +139,35 @@ omlc_inject_metadata(OmlMP *mp, const char *key, const OmlValueU *value, OmlValu
   } else {
     assert(mp->name);
 
-    omlc_set_string_copy(v[0], key, strlen(key)); /* Not sure where this one comes from; duplicate */
-    omlc_copy_string(v[1], *value);
-    /* XXX: At the moment, MS are named as APPNAME_MPNAME.
-     * Be consistent with it here, until #1055 is addressed */
-    mstring_set (namestr, omlc_instance->app_name);
-    mstring_cat (namestr, "_");
-    mstring_cat (namestr, mp->name);
-    omlc_set_string_copy(v[2], mstring_buf(namestr), mstring_len(namestr));
-    omlc_reset_string(v[3]); /* Set a null pointer */
-    mstring_delete(namestr);
-    if (fname) {
-      /* Make sure fname exists in this MP */
-      /* XXX: This should probably be done in another function (returning the OmlMPDef? */
-      for (i = 0; (i < mp->param_count) && strcmp(mp->param_defs[i].name, fname); i++);
-      if (i >= mp->param_count) {
-        logerror("Field %s not found in MP %s, not reporting\n", fname, mp->name);
-      } else {
-        /* Let's use a value we know to be static */
-        omlc_set_string(v[3], mp->param_defs[i].name);
+    mstring_set (subject, ".");
+    /* We don't support NULL MPs just yet, but this might come;
+     * this is for future-proofness when we lift the !mp test above.
+    if(NULL != mp ) {
+     */
+      /* XXX: At the moment, MS are named as APPNAME_MPNAME.
+       * Be consistent with it here, until #1055 is addressed */
+      mstring_sprintf(subject, "%s_%s", omlc_instance->app_name, mp->name);
+      if (NULL != fname) {
+        /* Make sure fname exists in this MP */
+        /* XXX: This should probably be done in another function (returning the OmlMPDef? */
+        for (i = 0; (i < mp->param_count) && strcmp(mp->param_defs[i].name, fname); i++);
+        if (i >= mp->param_count) {
+          logwarn("Field %s not found in MP %s, not reporting\n", fname, mp->name);
+        } else {
+          mstring_sprintf(subject, ".%s", fname);
+        }
       }
-    }
+    /* } */
+    omlc_set_string(v[0], mstring_buf(subject));
+    omlc_set_string(v[1], key); /* We're not sure where this one comes from, so duplicate it */
+    omlc_copy_string(v[2], *value);
+    mstring_delete(subject);
 
     omlc_inject(schema0, v);
 
     omlc_reset_string(v[0]);
     omlc_reset_string(v[1]);
     omlc_reset_string(v[2]);
-    omlc_reset_string(v[3]);
 
     ret = 0;
   }

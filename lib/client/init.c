@@ -55,10 +55,9 @@ OmlClient* omlc_instance = NULL;
 #define DEF_LOG_LEVEL = O_LOG_INFO;
 
 static OmlMPDef _experiment_metadata[] = {
+  {"subject", OML_STRING_VALUE},
   {"key", OML_STRING_VALUE},
   {"value", OML_STRING_VALUE},
-  {"mpname", OML_STRING_VALUE},
-  {"fname", OML_STRING_VALUE},
   {NULL, (OmlValueT)0}
 };
 OmlMP *schema0;
