@@ -619,7 +619,7 @@ process_bin_data_message(ClientHandler* self, OmlBinaryHeader* header)
   int table_index;
   int seqno;
   struct schema *schema;
-  int i, ki = -1, vi = -1;
+  int i, ki = -1, vi = -1, si = -1;
   DbTable *table;
   MBuffer* mbuf = self->mbuf;
   OmlValue *v;
@@ -679,11 +679,21 @@ process_bin_data_message(ClientHandler* self, OmlBinaryHeader* header)
         ki = i;
       } else if (!strcmp(schema->fields[i].name, "value")) {
         vi = i;
+      } else if (!strcmp(schema->fields[i].name, "subject")) {
+        si = i;
       }
     }
-    if (ki<0 || vi <0) {
-      logerror("%s(bin): Trying to process metadata from a schema without 'key' or 'value' fields\n", self->name);
+    if (ki<0 || vi<0 || si<0) {
+      logerror("%s(bin): Trying to process metadata from a schema without 'subject', 'key' or 'value' fields\n", self->name);
       return;
+
+    } else if (oml_value_get_type(&v[si]) != OML_STRING_VALUE ) {
+      logwarn("%s(bin): Expecting metadata, but subject is not a string (%d), ignoring\n",
+          self->name, oml_value_get_type(&v[si]));
+
+    } else if (strcmp(".", omlc_get_string_ptr(*oml_value_get_value(&v[si])))) {
+      logwarn("%s(bin): Metadata subject '%s' is not the root, ignoring\n",
+          self->name, omlc_get_string_ptr(*oml_value_get_value(&v[si])));
 
     } else if (oml_value_get_type(&v[ki]) != OML_STRING_VALUE ) {
       logwarn("%s(bin): Expecting metadata, but key is not a string (%d), ignoring\n",
@@ -697,7 +707,7 @@ process_bin_data_message(ClientHandler* self, OmlBinaryHeader* header)
     } else if(process_meta(self,
           omlc_get_string_ptr(*oml_value_get_value(&v[ki])),
           omlc_get_string_ptr(*oml_value_get_value(&v[vi]))) <= 0) {
-      /* Recognised and tried to process metadata, no need to do more here */
+      logdebug("%s(bin): No need to store metadata separately", self->name);
       return;
     }
   }
