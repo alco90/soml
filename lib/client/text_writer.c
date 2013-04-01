@@ -201,6 +201,14 @@ owt_row_cols(OmlWriter* writer, OmlValue* values, int value_count)
 
 /** Function called after all items in a tuple have been sent
  * \see oml_writer_row_start
+ *
+ * Depending on the MS index, write into the normal write buffer chain, or (if
+ * 0), the meta MBuffer.  This logic belongs in higher layers, to decide
+ * whether anything is header or not. However, given the current
+ * implementation, this limit is unfortunately blurred. It is also duplicated
+ * with the bin_writer.  See #1101.
+ *
+ * This function also implements some of the text protocol directly. See #1088.
  */
 static int
 owt_row_start(OmlWriter* writer, OmlMStream* ms, double now)
@@ -208,14 +216,21 @@ owt_row_start(OmlWriter* writer, OmlMStream* ms, double now)
   OmlTextWriter* self = (OmlTextWriter*)writer;
   assert(self->bufferedWriter != NULL);
 
-  MBuffer* mbuf;
-  if ((mbuf = self->mbuf = bw_get_write_buf(self->bufferedWriter, 1)) == NULL) {
-    return 0;
+  if(ms->index != 0) {
+    self->mbuf = bw_get_write_buf(self->bufferedWriter, 1);
+    if (!self->mbuf) { return 0; }
+
+  } else {
+    /* schema 0 needs to be remembered in case of reconnection, write into
+     * the meta MBuffer instead of the normal write one...
+     */
+    self->mbuf = bw_get_meta_buf(self->bufferedWriter, 1);
+    if (!self->mbuf) { return 0; }
   }
 
-  mbuf_begin_write(mbuf);
-  if (mbuf_print(mbuf, "%f\t%d\t%ld", now, ms->index, ms->seq_no)) {
-    mbuf_reset_write(mbuf);
+  mbuf_begin_write(self->mbuf);
+  if (mbuf_print(self->mbuf, "%f\t%d\t%ld", now, ms->index, ms->seq_no)) {
+    mbuf_reset_write(self->mbuf);
     self->mbuf = NULL;
     return 0;
   }
@@ -224,6 +239,10 @@ owt_row_start(OmlWriter* writer, OmlMStream* ms, double now)
 
 /** Function called after all items in a tuple have been sent
  * \see oml_writer_row_end
+ *
+ * This releases the lock on the BufferedWriter.
+ *
+ * \see BufferedWriter, bw_unlock_buf, marshal_finalize
  */
 static int
 owt_row_end(OmlWriter* writer, OmlMStream* ms)

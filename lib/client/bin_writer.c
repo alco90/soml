@@ -165,7 +165,12 @@ owb_row_cols(OmlWriter* writer, OmlValue* values, int value_count)
  * writer's Mbuffer.
  *
  * This acquires a lock on the BufferedWriter (bw_get_write_buf(...,
- * exclusive=1)).
+ * exclusive=1)), or its meta Mbuffer in case the OmlMStream happens to be
+ * schema 0.
+ * XXX: This last bit of logic belongs in higher layers, to decide whether
+ * anything is header or not. However, given the current implementation, this
+ * limit is unfortunately blurred. It is also duplicated with the text_writer.
+ * See #1101.
  *
  * \see BufferedWriter, bw_get_write_buf, marshal_init, marshal_measurements
  * \see gettimeofday(3)
@@ -176,13 +181,20 @@ owb_row_start(OmlWriter* writer, OmlMStream* ms, double now)
   OmlBinWriter* self = (OmlBinWriter*)writer;
   assert(self->bufferedWriter != NULL);
 
-  MBuffer* mbuf;
-  if ((mbuf = self->mbuf = bw_get_write_buf(self->bufferedWriter, 1)) == NULL) {
-    return 0;
+  if(ms->index != 0) {
+    self->mbuf = bw_get_write_buf(self->bufferedWriter, 1);
+    if (!self->mbuf) { return 0; }
+
+  } else {
+    /* schema 0 needs to be remembered in case of reconnection, write into
+     * the meta MBuffer instead of the normal write one...
+     */
+    self->mbuf = bw_get_meta_buf(self->bufferedWriter, 1);
+    if (!self->mbuf) { return 0; }
   }
 
-  marshal_init (mbuf, self->msgtype);
-  marshal_measurements(mbuf, ms->index, ms->seq_no, now);
+  marshal_init (self->mbuf, self->msgtype);
+  marshal_measurements(self->mbuf, ms->index, ms->seq_no, now);
   return 1;
 }
 
@@ -203,12 +215,11 @@ owb_row_end(OmlWriter* writer, OmlMStream* ms) {
   }
 
   marshal_finalize(self->mbuf);
-  if (marshal_get_msgtype (self->mbuf) == OMB_LDATA_P)
+  if (marshal_get_msgtype (self->mbuf) == OMB_LDATA_P) {
     self->msgtype = OMB_LDATA_P; // Generate long packets from now on.
-
-  mbuf_begin_write(mbuf);
-
+  }
   self->mbuf = NULL;
+  mbuf_begin_write(mbuf);
   bw_unlock_buf(self->bufferedWriter);
   return 1;
 }

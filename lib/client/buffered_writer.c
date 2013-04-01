@@ -238,7 +238,7 @@ bw_push_meta(BufferedWriterHdl instance, uint8_t* chunk, size_t size)
  * \param exclusive indicate whether the entire BufferedWriter should be locked
  *
  * \return an MBuffer instance if success to write in, NULL otherwise
- * \see bw_unlock_buf
+ * \see bw_unlock_buf, bw_get_meta_buf
  */
 MBuffer*
 bw_get_write_buf(BufferedWriterHdl instance, int exclusive)
@@ -261,11 +261,43 @@ bw_get_write_buf(BufferedWriterHdl instance, int exclusive)
   return mbuf;
 }
 
+/** Return a meta MBuffer with (optional) exclusive write access
+ *
+ * If exclusive access is required, the caller is in charge of releasing the
+ * lock with bw_unlock_buf.
+ *
+ * XXX: The meta headers buffer should probably behave like a chain too, and
+ * both bw_get_write_buf and bw_get_meta_buf be the same function with a single
+ * base pointer difference. See #1101 (ish).
+ *
+ * \param instance BufferedWriter handle
+ * \param exclusive indicate whether the entire BufferedWriter should be locked
+ *
+ * \return the meta MBuffer instance if success to write in, NULL otherwise
+ * \see bw_unlock_buf, bw_get_write_buf
+ */
+MBuffer*
+bw_get_meta_buf(BufferedWriterHdl instance, int exclusive)
+{
+  BufferedWriter* self = (BufferedWriter*)instance;
+  if (oml_lock(&self->lock, __FUNCTION__)) { return 0; }
+  if (!self->active) { return 0; }
+
+  MBuffer* mbuf = self->meta_buf;
+  if (! exclusive) {
+    oml_unlock(&self->lock, __FUNCTION__);
+  }
+  return mbuf;
+}
 
 /** Return and unlock MBuffer
- * \param instance BufferedWriter handle for which a buffer was previously obtained through bw_get_write_buf
  *
- * \see bw_get_write_buf
+ * This also signals the writer thread that new data might be available in one
+ * of the buffers (write chain or meta).
+ *
+ * \param instance BufferedWriter handle for which a buffer was previously obtained through bw_get_write_buf or bw_get_meta_buf
+ *
+ * \see bw_get_write_buf, bw_get_meta_buf
  */
 void
 bw_unlock_buf(BufferedWriterHdl instance)
@@ -400,7 +432,8 @@ threadStart(void* handle)
     pthread_cond_wait(&self->semaphore, &self->lock);
     // Process all chains which have data in them
     while(1) {
-      if (mbuf_message(chain->mbuf) > mbuf_rdptr(chain->mbuf)) {
+      if (mbuf_message(chain->mbuf) > mbuf_rdptr(chain->mbuf) ||
+          mbuf_message(self->meta_buf) > mbuf_rdptr(self->meta_buf)) {
         // got something to read from this chain
         while (!processChain(self, chain));
       }
@@ -416,6 +449,10 @@ threadStart(void* handle)
 }
 
 /** Process the chain and send data
+ *
+ * As a side-effect, also process the metadata buffer, and send any outstanding
+ * header data.
+ *
  * \param selfBufferedWriter to process
  * \param chain link of the chain to process
  *

@@ -27,6 +27,7 @@ int bw_push(BufferedWriterHdl instance, uint8_t* chunk, size_t size);
 int bw_push_meta(BufferedWriterHdl instance, uint8_t* chunk, size_t size);
 
 MBuffer* bw_get_write_buf(BufferedWriterHdl instance, int exclusive);
+MBuffer* bw_get_meta_buf(BufferedWriterHdl instance, int exclusive);
 
 void bw_unlock_buf(BufferedWriterHdl instance);
 
