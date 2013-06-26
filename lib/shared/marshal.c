@@ -818,8 +818,7 @@ unmarshal_measurements(
  * If the returned number is negative, there were more values than could fit in
  * the array in the buffer, and some were skipped.  This number (when
  * multiplied by -1) indicates  by how much the values array should be
- * extended. If the number is less than
- * -100, it indicates an error.
+ * extended. If the number is less than -100, it indicates an error.
  *
  * \param mbuf MBuffer to read from
  * \param header pointer to an OmlBinaryHeader corresponding to this message

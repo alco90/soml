@@ -688,6 +688,10 @@ process_bin_data_message(ClientHandler* self, OmlBinaryHeader* header)
   oml_value_array_reset(v, count);
   count = unmarshal_measurements(mbuf, header, v, count);
 
+  if (count < 100) {
+    return;
+  }
+
   schema = table->schema;
   if (schema->nfields != count) {
     logerror("%s(bin): Data item number mismatch for schema '%s' (expected %d, got %d)\n",
