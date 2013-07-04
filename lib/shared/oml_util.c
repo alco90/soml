@@ -47,12 +47,8 @@ void chomp(char *str)
  */
 #define find_matching(p, cond, len)  \
 do {                              \
-  while (p && !(cond)) {          \
-    if (!--len || *p == 0) {      \
-      p = NULL;                   \
-    } else {                      \
+  while (*p && !(cond)) {         \
       p++;                        \
-    }                             \
   }                               \
 } while(0)
 
