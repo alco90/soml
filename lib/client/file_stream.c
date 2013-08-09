@@ -72,6 +72,7 @@ file_stream_new(const char *file)
   self->write = file_stream_write;
   self->close = file_stream_close;
   self->dest = (char*)xstrndup (file, strlen (file));
+  self->close = file_stream_close;
   self->header_written = 0;
   return (OmlOutStream*)self;
 }
