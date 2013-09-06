@@ -15,6 +15,8 @@ mkdir -p "$DBDIR"
 
 port=$((RANDOM + 32766))
 
+echo "1..1"
+
 # Start an OML server
 ${top_builddir}/server/oml2-server -l $port -D "$DBDIR" --oml-collect localhost:$port --oml-domain "$DOMAIN" --oml-id oml2-server > oml_server.log 2>&1 &
 OMLPID=$!
@@ -39,18 +41,18 @@ EOF
 	 if [[ $? = 0 && -e "$COUNT" ]]; then
 		  n=`cat ${COUNT}`
 		  if [ 0 -lt $n ]; then
-				echo 2>&1 "PASS:	server instrumentation"
+				echo 2>&1 "ok 1 - server instrumentation"
 		  else
-				echo 2>&1 "ERROR:	no (dis)connection entries!"
+				echo 2>&1 "not ok 1 - no (dis)connection entries!"
 				exit 1
 		  fi
 	 else
-		  echo 2>&1 "ERROR:	Failed to query results from ${SQLDB}!"
+		  echo 2>&1 "not ok 1 - Failed to query results from ${SQLDB}!"
 		  exit 1
 	 fi
 
 else
-	 echo 2>&1 "ERROR:	Failed to find ${SQLDB}!"
+	 echo 2>&1 "not ok 1 -Failed to find ${SQLDB}!"
 	 exit 2
 fi
 
