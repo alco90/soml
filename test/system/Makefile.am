@@ -1,5 +1,7 @@
-
 TESTS_ENVIRONMENT = top_builddir=$(top_builddir) srcdir=$(srcdir) POSTGRES=$(POSTGRES) TIMEOUT=$(TIMEOUT) VERSION=$(VERSION)
+LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
+		  $(top_srcdir)/build-aux/tap-driver.sh
+
 TESTS = run.sh run-long.sh
 if HAVE_LIBPQ
 if HAVE_POSTGRES

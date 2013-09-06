@@ -221,6 +221,7 @@ fi
 
 # Calculate the diffs, return result
 echo "# $0: Checking that server stored data match client-generated data..." >&2
+echo "#"
 echo "1..$tottests"
 fail=$tottests
 for g in ${dir}/g*; do

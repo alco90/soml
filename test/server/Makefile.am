@@ -1,5 +1,7 @@
 ACLOCAL_AMFLAGS = -I ../../m4 -Wnone
-AM_TESTS_ENVIRONMENT = CK_VERBOSITY=verbose
+AM_TESTS_ENVIRONMENT = CK_VERBOSITY=tap
+LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
+		  $(top_srcdir)/build-aux/tap-driver.sh
 
 if HAVE_CHECK
 TESTS = check_server

@@ -356,6 +356,9 @@ AC_CONFIG_FILES([Makefile
 		 test/system/Makefile
 		 ])
 
+AC_REQUIRE_AUX_FILE([tap-driver.sh])
+AC_PROG_AWK
+
 AS_IF([test "x$missing_check" != "x"],
    [AC_MSG_WARN([could not find the `check' package, required for running unit tests. This will not stop OML from building, but it will cause `make check' to do nothing. Install the `check' package (http://check.sourceforge.net) if you wish to run the unit tests.])])
 
