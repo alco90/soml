@@ -3,26 +3,37 @@ TESTS_ENVIRONMENT = top_srcdir=$(top_srcdir) srcdir=$(srcdir) \
 		    top_builddir=$(top_builddir) builddir=$(builddir) \
 		    VERSION=$(VERSION) CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" LIBADD="$(LIBADD)" \
 		    POSTGRES=$(POSTGRES) TIMEOUT="$(TIMEOUT)"
-TESTS = scaffold.sh run.sh run-long.sh
+
+TESTS = scaffold.sh
+if HAVE_TIMEOUT
+TESTS += non-block.sh
+endif
+
+if HAVE_PYTHON
+TESTS += self-inst.sh
+endif
+
+# Test everything before exercising the whole chain, which takes longer
+TESTS += run.sh run-long.sh
 if HAVE_LIBPQ
 if HAVE_POSTGRES
 TESTS += runpg.sh runpg-long.sh
 endif #HAVE_POSTGRES
 endif #HAVE_LIBPQ
 
-if HAVE_PYTHON
-TESTS += self-inst.sh
-endif
-
 EXTRA_DIST = \
 	     tap_helper.sh \
 	     run.sh run-long.sh runpg.sh runpg-long.sh \
-	     scaffold.sh \
+	     scaffold.sh non-block.sh \
 	     self-inst.sh self-inst.py
 
 check_PROGRAMS = blobgen
 
 CLEANFILES = memstats.csv \
+	     non-block.log \
+	     g1.bin \
+	     gk1.meta \
+	     gk2.meta \
 	     clientblobgen--longpg.csv \
 	     clientblobgen--longsq3.csv \
 	     clientblobgenpg.csv \

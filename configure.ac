@@ -298,7 +298,9 @@ AM_CONDITIONAL([HAVE_RUBY_MIN_1_8_7], [test x"${missing_rubyge187}" != xyes])
 missing_check=""
 PKG_CHECK_MODULES([CHECK], [check >= 0.9.4], [], [missing_check="yes"])
 AM_CONDITIONAL([HAVE_CHECK], [test x"${missing_check}" != xyes])
+
 AX_WITH_PROG([TIMEOUT],[timeout])
+AM_CONDITIONAL([HAVE_TIMEOUT], [test "x$TIMEOUT" != x])
 
 AC_ARG_ENABLE([doc],
 		[AS_HELP_STRING([--disable-doc],
