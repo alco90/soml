@@ -131,10 +131,11 @@ filter_process(OmlMStream* ms)
        * called, even if there is a problem somewhere along the way.
        * \see oml_writer_row_start, oml_writer_out, oml_writer_row_end
        */
-      if(writer->row_start(writer, ms, now) == 1)
+      if(writer->row_start(writer, ms, now) == 1) {
         ms->written++;
-      else
+      } else {
         ms->dropped++;
+      }
 
       f = ms->firstFilter;
       for (; f != NULL; f = f->next) {
