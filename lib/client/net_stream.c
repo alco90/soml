@@ -216,7 +216,7 @@ net_stream_write(OmlOutStream* hdl, uint8_t* buffer, size_t  length, uint8_t* he
         // PANIC
         logwarn("%s: Only wrote parts of the header; this might cause problem later on\n", self->dest);
       }
-      return 0;
+      return -1;
     }
     self->header_written = 1;
   }

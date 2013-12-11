@@ -530,6 +530,9 @@ processChunk(BufferedWriter* self, BufferChunk* chunk)
         loginfo("%s: Connected\n", self->outStream->dest);
       }
 
+    } else if (cnt == 0) {
+        logdebug("%s: Did not send anything\n", self->outStream->dest);
+
     } else {
       /* To be on the safe side, we rewind to the beginning of the
        * chunk and try to resend everything - this is especially important
