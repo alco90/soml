@@ -198,7 +198,7 @@ bw_close(BufferedWriterHdl instance)
  * \param instance BufferedWriter handle
  * \param data Pointer to data to add
  * \param size size of data
- * \return 1 if success, 0 otherwise
+ * \return 0 on success, -1 on error
  *
  * \see _bw_push
  */
@@ -227,22 +227,22 @@ int
 _bw_push(BufferedWriterHdl instance, uint8_t* data, size_t size)
 {
   BufferedWriter* self = (BufferedWriter*)instance;
-  if (!self->active) { return 0; }
+  if (!self->active) { return -1; }
 
   BufferChunk* chunk = self->writerChunk;
-  if (chunk == NULL) { return 0; }
+  if (chunk == NULL) { return -1; }
 
   if (mbuf_wr_remaining(chunk->mbuf) < size) {
     chunk = self->writerChunk = getNextWriteChunk(self, chunk);
   }
 
   if (mbuf_write(chunk->mbuf, data, size) < 0) {
-    return 0;
+    return -1;
   }
 
   pthread_cond_signal(&self->semaphore);
 
-  return 1;
+  return 0;
 }
 
 /** Add some data to the end of the header buffer.
@@ -253,7 +253,7 @@ _bw_push(BufferedWriterHdl instance, uint8_t* data, size_t size)
  * \param instance BufferedWriter handle
  * \param data Pointer to data to add
  * \param size size of data
- * \return 1 if success, 0 otherwise
+ * \return 0 on success, -1 on error
  *
  * \see _bw_push_meta
  */
@@ -283,12 +283,12 @@ int
 _bw_push_meta(BufferedWriterHdl instance, uint8_t* data, size_t size)
 {
   BufferedWriter* self = (BufferedWriter*)instance;
-  int result = 0;
+  int result = -1;
 
-  if (!self->active) { return 0; }
+  if (!self->active) { return -1; }
 
   if (mbuf_write(self->meta_buf, data, size) > 0) {
-    result = 1;
+    result = 0;
     /* XXX: There is no point in signalling the semaphore as the
      * writer will not be able to do anything with the new data.
      *

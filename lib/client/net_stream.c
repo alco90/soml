@@ -146,7 +146,7 @@ signal_handler(int signum)
  * (SIGPIPE), but sometimes doesn't (XXX: the conditions need to be clarified).
  *
  * \param self OmlNetOutStream containing the parameters
- * \return 1 on success, 0 on error
+ * \return 0 on success, -1 on error
  *
  * \see signal_handler
  */
@@ -162,14 +162,14 @@ open_socket(OmlNetOutStream* self)
   if (strcmp(self->protocol, "tcp") == 0) {
     Socket* sock;
     if ((sock = socket_tcp_out_new(self->dest, self->host, self->service)) == NULL) {
-      return 0;
+      return -1;
     }
 
     self->socket = sock;
     self->header_written = 0;
   } else {
     logerror("%s: Unsupported transport protocol '%s'\n", self->dest, self->protocol);
-    return 0;
+    return -1;
   }
 
   // Catching SIGPIPE signals if the associated socket is closed
@@ -182,9 +182,10 @@ open_socket(OmlNetOutStream* self)
   /* XXX: Shouldn't we set up the handler ONLY if the old one is SIG_IGN? */
   if (old_action.sa_handler != SIG_IGN) {
     sigaction (SIGPIPE, &new_action, NULL);
+    return 0;
   }
 
-  return 1;
+  return -1;
 }
 
 /** Called to write into the socket
@@ -201,7 +202,7 @@ net_stream_write(OmlOutStream* hdl, uint8_t* buffer, size_t  length, uint8_t* he
 
   while (self->socket == NULL) {
     logdebug ("%s: Connecting to server\n", self->dest);
-    if (!open_socket(self)) {
+    if (open_socket(self) < 0) {
       logdebug("%s: Connection attempt failed\n", self->dest);
       return 0;
     }

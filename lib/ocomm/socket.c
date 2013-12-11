@@ -278,7 +278,7 @@ socket_in_new(const char* name, const char* node, const char* service, int is_tc
  * If addr is NULL, assume the servAddr is already populated, and ignore port.
  *
  * \param self OComm socket to use
- * \return 1 on success, 0 on error
+ * \return 0 on success, -1 on error
  */
 static int
 s_connect(SocketInt* self)
@@ -297,7 +297,7 @@ s_connect(SocketInt* self)
   if (!self->dest || !self->service) {
     o_log(O_LOG_ERROR, "socket(%s): destination or service missing. Is this an outgoing socket?\n",
         self->name);
-    return 0;
+    return -1;
   }
 
   if (!self->rp) {
@@ -306,7 +306,7 @@ s_connect(SocketInt* self)
     if ((ret=getaddrinfo(self->dest, self->service, &hints, &self->results))) {
       o_log(O_LOG_ERROR, "socket(%s): Error resolving %s:%s: %s\n",
           self->name, self->dest, self->service, gai_strerror(ret));
-      return 0;
+      return -1;
     }
     self->rp = self->results;
   }
@@ -341,7 +341,7 @@ s_connect(SocketInt* self)
               self->name, name, strerror(errno));
           /* XXX refactor */
           self->is_disconnected = 0;
-          return 1;
+          return 0;
           break;
 
         case EALREADY:
@@ -349,7 +349,7 @@ s_connect(SocketInt* self)
               self->name, name, strerror(errno));
           /* XXX refactor */
           self->is_disconnected = 0;
-          return 1;
+          return 0;
           break;
 
         default:
@@ -367,7 +367,7 @@ s_connect(SocketInt* self)
 
         /* Get ready to try the next addrinfo in case this one failed */
         //self->rp = self->rp->ai_next;
-        return 1;
+        return 0;
 
       }
     }
@@ -377,7 +377,7 @@ s_connect(SocketInt* self)
 
   freeaddrinfo(self->results);
   self->results = NULL;
-  return 0;
+  return -1;
 }
 
 /** Create a new outgoing TCP Socket.
@@ -540,7 +540,7 @@ socket_close(Socket* socket)
  * \param socket Socket to send message through
  * \param buf data to send
  * \param buf_size amount of data to read from buf
- * \return the amount of data sent
+ * \return the amount of data sent or -1 on error
  *
  * \see sendto(3)
  */
@@ -552,7 +552,7 @@ socket_sendto(Socket* socket, char* buf, int buf_size)
 
   if (self->is_disconnected) {
     if(!s_connect(self)) {
-      return 0;
+      return -1;
     }
   }
 
@@ -565,30 +565,30 @@ socket_sendto(Socket* socket, char* buf, int buf_size)
       self->is_disconnected = 1;
       o_log(O_LOG_ERROR, "socket(%s): The remote peer closed the connection: %s\n",
             self->name, strerror(errno));
-      return 0;
+      return -1;
 
     } else if (errno == EAGAIN) {
       o_log(O_LOG_WARN, "socket(%s): Cannot send data at the moment: %s\n",
             self->name, strerror(errno));
-      return 0;
 
     } else if (errno == ECONNREFUSED) {
       self->is_disconnected = 1;
       o_log(O_LOG_DEBUG, "socket(%s): Connection refused, trying next AI\n",
             self->name);
       self->rp = self->rp->ai_next;
-      return 0;
 
     } else if (errno == EINTR) {
       o_log(O_LOG_WARN, "socket(%s): Sending data interrupted: %s\n",
             self->name, strerror(errno));
-      return 0;
 
     } else {
       o_log(O_LOG_ERROR, "socket(%s): Sending data failed: %s\n",
             self->name, strerror(errno));
+      return -1;
     }
-    return -1;
+
+    /* Temporary failures */
+    return 0;
   }
   return sent;
 }
