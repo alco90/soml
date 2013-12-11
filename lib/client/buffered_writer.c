@@ -493,7 +493,7 @@ threadStart(void* handle)
  * \param self BufferedWriter to process
  * \param chunk link of the chunk to process
  *
- * \return 1 if chunk has been fully sent, 0 otherwise
+ * \return 1 if chunk has been fully sent, 0 otherwise, -1 on error
  * \see oml_outs_write_f
  */
 static int
@@ -532,6 +532,11 @@ processChunk(BufferedWriter* self, BufferChunk* chunk)
 
     } else if (cnt == 0) {
         logdebug("%s: Did not send anything\n", self->outStream->dest);
+
+    } else if(self->backoff && !self->active) {
+      logwarn("%s: Error sending while draining queue; giving up...\n", self->outStream->dest);
+      chunk->reading = 0;
+      return -1;
 
     } else {
       /* To be on the safe side, we rewind to the beginning of the
