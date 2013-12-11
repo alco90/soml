@@ -94,7 +94,7 @@ net_stream_new(const char *transport, const char *hostname, const char *service)
   self->service = (char*)oml_strndup (service, strlen (service));
 
   logdebug("%s: Created OmlNetOutStream\n", self->dest);
-  socket_set_non_blocking_mode(0);
+  socket_set_non_blocking_mode(1);
 
   /* // Now see if we can connect to server */
   /* if (! open_socket(self)) { */

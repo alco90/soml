@@ -335,8 +335,28 @@ s_connect(SocketInt* self)
       }
 
       if (0 != connect(self->sockfd, self->rp->ai_addr, self->rp->ai_addrlen)) {
-        o_log(O_LOG_DEBUG, "socket(%s): Could not connect to %s: %s\n",
-            self->name, name, strerror(errno));
+        switch(errno) {
+        case EINPROGRESS:
+          o_log(O_LOG_WARN, "socket(%s): Connection did not succeed immediately: %s\n",
+              self->name, name, strerror(errno));
+          /* XXX refactor */
+          self->is_disconnected = 0;
+          return 1;
+          break;
+
+        case EALREADY:
+          o_log(O_LOG_WARN, "socket(%s): Still not connected: %s\n",
+              self->name, name, strerror(errno));
+          /* XXX refactor */
+          self->is_disconnected = 0;
+          return 1;
+          break;
+
+        default:
+          o_log(O_LOG_DEBUG, "socket(%s): Could not connect to %s: %s\n",
+              self->name, name, strerror(errno));
+          break;
+        }
 
       } else {
         if (!nonblocking_mode) {
@@ -546,16 +566,24 @@ socket_sendto(Socket* socket, char* buf, int buf_size)
       o_log(O_LOG_ERROR, "socket(%s): The remote peer closed the connection: %s\n",
             self->name, strerror(errno));
       return 0;
+
+    } else if (errno == EAGAIN) {
+      o_log(O_LOG_WARN, "socket(%s): Cannot send data at the moment: %s\n",
+            self->name, strerror(errno));
+      return 0;
+
     } else if (errno == ECONNREFUSED) {
       self->is_disconnected = 1;
       o_log(O_LOG_DEBUG, "socket(%s): Connection refused, trying next AI\n",
             self->name);
       self->rp = self->rp->ai_next;
       return 0;
+
     } else if (errno == EINTR) {
       o_log(O_LOG_WARN, "socket(%s): Sending data interrupted: %s\n",
             self->name, strerror(errno));
       return 0;
+
     } else {
       o_log(O_LOG_ERROR, "socket(%s): Sending data failed: %s\n",
             self->name, strerror(errno));
