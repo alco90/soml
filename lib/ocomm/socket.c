@@ -570,33 +570,32 @@ socket_sendto(Socket* socket, char* buf, int buf_size)
   if ((sent = sendto(self->sockfd, buf, buf_size, 0,
                     &(self->servAddr.sa),
                     sizeof(self->servAddr.sa_stor))) < 0) {
-    if (errno == EPIPE || errno == ECONNRESET) {
-      // The other end closed the connection.
-      self->is_connected = 0;
-      o_log(O_LOG_ERROR, "socket(%s): The remote peer closed the connection: %s\n",
-            self->name, strerror(errno));
-      return -1;
-
-    } else if (errno == EAGAIN) {
-      o_log(O_LOG_WARN, "socket(%s): Cannot send data at the moment: %s\n",
-            self->name, strerror(errno));
-
-    } else if (errno == ECONNREFUSED) {
+    switch(errno) {
+      /* Connection phase */
+    case ECONNREFUSED:
       o_log(O_LOG_DEBUG, "socket(%s): Connection refused, trying next AI\n",
-            self->name);
+          self->name);
       self->rp = self->rp->ai_next;
       self->is_connected = 0;
       return -1;
+      break;
 
-    } else if (errno == EINTR) {
-      o_log(O_LOG_WARN, "socket(%s): Sending data interrupted: %s\n",
-            self->name, strerror(errno));
+      /* Connection/writing phase; non failures */
+    case EAGAIN:
+    case EINTR:
+      o_log(O_LOG_DEBUG, "socket(%s): Cannot send data at the moment: %s\n",
+          self->name, strerror(errno));
+      break;
 
-    } else {
+      /* Failures */
+    case EPIPE:
+    case ECONNRESET:
+    default:
       o_log(O_LOG_ERROR, "socket(%s): Sending data failed: %s\n",
-            self->name, strerror(errno));
+          self->name, strerror(errno));
       self->is_connected = 0;
       return -1;
+      break;
     }
 
     /* Temporary failures */
