@@ -243,8 +243,9 @@ socket_write(OmlNetOutStream* self, uint8_t* buffer, size_t  length)
 {
   int result = socket_sendto(self->socket, (char*)buffer, length);
 
-  if (result == -1 && socket_is_disconnected (self->socket)) {
+  if (result == -1 && socket_is_disconnected (self->socket) && self->header_written) {
     logwarn ("%s: Connection lost\n", self->dest);
+    self->header_written = 0;
   }
   return result;
 }
