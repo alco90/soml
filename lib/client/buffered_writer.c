@@ -544,6 +544,7 @@ processChunk(BufferedWriter* self, BufferChunk* chunk)
 
     } else if (cnt == 0) {
         logdebug("%s: Did not send anything\n", self->outStream->dest);
+        break;
 
     } else if(self->backoff && !self->active) {
       logwarn("%s: Error sending while draining queue; giving up...\n", self->outStream->dest);
