@@ -207,7 +207,7 @@ bw_push(BufferedWriterHdl instance, uint8_t *data, size_t size)
 {
   int result = 0;
   BufferedWriter* self = (BufferedWriter*)instance;
-  if (oml_lock(&self->lock, __FUNCTION__) == 0) {
+  if (0 == oml_lock(&self->lock, __FUNCTION__)) {
     result =_bw_push(instance, data, size);
     oml_unlock(&self->lock, __FUNCTION__);
   }
@@ -262,7 +262,7 @@ bw_push_meta(BufferedWriterHdl instance, uint8_t* data, size_t size)
 {
   int result = 0;
   BufferedWriter* self = (BufferedWriter*)instance;
-  if (oml_lock(&self->lock, __FUNCTION__) == 0) {
+  if (0 == oml_lock(&self->lock, __FUNCTION__)) {
     result = _bw_push_meta(instance, data, size);
     oml_unlock(&self->lock, __FUNCTION__);
   }
@@ -312,19 +312,31 @@ _bw_push_meta(BufferedWriterHdl instance, uint8_t* data, size_t size)
 MBuffer*
 bw_get_write_buf(BufferedWriterHdl instance, int exclusive)
 {
+  MBuffer* mbuf = NULL;
+  BufferChunk* chunk = NULL;
+
+  assert(instance);
   BufferedWriter* self = (BufferedWriter*)instance;
-  if (oml_lock(&self->lock, __FUNCTION__)) { return 0; }
-  if (!self->active) { return 0; }
 
-  BufferChunk* chunk = self->writerChunk;
-  if (chunk == NULL) { return 0; }
+  if (oml_lock(&self->lock, __FUNCTION__)) {
+    logdebug("%s: Cannot acquire lock to \n", self->outStream->dest);
+    return NULL;
 
-  MBuffer* mbuf = chunk->mbuf;
-  if (mbuf_write_offset(mbuf) >= chunk->targetBufSize) {
-    chunk = self->writerChunk = getNextWriteChunk(self, chunk);
+  } else if (!self->active) {
+    logdebug("%s: Writer inactive, cannot write anymore\n", self->outStream->dest);
+
+  } else if ((chunk = self->writerChunk)) {
     mbuf = chunk->mbuf;
+    assert(mbuf);
+
+    if (mbuf_write_offset(mbuf) >= chunk->targetBufSize) {
+      chunk = self->writerChunk = getNextWriteChunk(self, chunk);
+      mbuf = chunk->mbuf;
+    }
+
   }
-  if (! exclusive) {
+
+  if (!exclusive || !mbuf) { /* Don't hold the lock if no write buffer was found */
     oml_unlock(&self->lock, __FUNCTION__);
   }
   return mbuf;
