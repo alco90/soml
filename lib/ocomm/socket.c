@@ -71,7 +71,7 @@ typedef struct SocketInt {
 
   void* connect_handle;     /**< Opaque argument to connect_callback (TCP servers only) */
 
-  int is_disconnected;      /**< 1 if a SIGPIPE or ECONNREFUSED was received on a sendto() */
+  int is_connected;         /**< !=0 if the socket is not connected */
 
   struct addrinfo *results, /** < Results from getaddrinfo to iterate over */
                   *rp;      /** < Current iterator over getaddrinfo results */
@@ -109,7 +109,7 @@ socket_get_non_blocking_mode()
 int
 socket_is_disconnected (Socket* socket)
 {
-  return ((SocketInt*)socket)->is_disconnected;
+  return 1-((SocketInt*)socket)->is_connected;
 }
 
 /** Get information about the listening state of a Socket
@@ -177,7 +177,6 @@ socket_new(const char* name, int is_tcp)
 {
   SocketInt* self = socket_initialize(name);
   self->is_tcp = is_tcp; /* XXX: replace is_tcp with a more meaningful variable to contain that */
-  self->is_disconnected = 1;
   return (Socket*)self;
 }
 
@@ -330,6 +329,8 @@ s_connect(SocketInt* self)
           self->name, name, strerror(errno));
 
     } else {
+      self->is_connected = 0; /* This is a new, never-connected, socket */
+
       if (nonblocking_mode) {
         fcntl(self->sockfd, F_SETFL, O_NONBLOCK);
       }
@@ -340,15 +341,14 @@ s_connect(SocketInt* self)
           o_log(O_LOG_WARN, "socket(%s): Connection did not succeed immediately: %s\n",
               self->name, name, strerror(errno));
           /* XXX refactor */
-          self->is_disconnected = 0;
+          self->is_connected = 1;
           return 0;
           break;
 
         case EALREADY:
           o_log(O_LOG_WARN, "socket(%s): Still not connected: %s\n",
               self->name, name, strerror(errno));
-          /* XXX refactor */
-          self->is_disconnected = 0;
+          self->is_connected = 1;
           return 0;
           break;
 
@@ -363,7 +363,7 @@ s_connect(SocketInt* self)
           o_log(O_LOG_DEBUG, "socket(%s): Connected to %s\n",
               self->name, name);
         }
-        self->is_disconnected = 0;
+        self->is_connected = 1;
 
         /* Get ready to try the next addrinfo in case this one failed */
         //self->rp = self->rp->ai_next;
@@ -550,8 +550,12 @@ socket_sendto(Socket* socket, char* buf, int buf_size)
   SocketInt *self = (SocketInt*)socket;
   int sent;
 
-  if (self->is_disconnected) {
-    if(!s_connect(self)) {
+  assert(socket);
+  assert(buf);
+  assert(buf_size>=0);
+
+  if (!self->is_connected) {
+    if(s_connect(self) < 0) {
       return -1;
     }
   }
@@ -562,7 +566,7 @@ socket_sendto(Socket* socket, char* buf, int buf_size)
                     sizeof(self->servAddr.sa_stor))) < 0) {
     if (errno == EPIPE || errno == ECONNRESET) {
       // The other end closed the connection.
-      self->is_disconnected = 1;
+      self->is_connected = 0;
       o_log(O_LOG_ERROR, "socket(%s): The remote peer closed the connection: %s\n",
             self->name, strerror(errno));
       return -1;
@@ -572,10 +576,11 @@ socket_sendto(Socket* socket, char* buf, int buf_size)
             self->name, strerror(errno));
 
     } else if (errno == ECONNREFUSED) {
-      self->is_disconnected = 1;
       o_log(O_LOG_DEBUG, "socket(%s): Connection refused, trying next AI\n",
             self->name);
       self->rp = self->rp->ai_next;
+      self->is_connected = 0;
+      return -1;
 
     } else if (errno == EINTR) {
       o_log(O_LOG_WARN, "socket(%s): Sending data interrupted: %s\n",
@@ -584,6 +589,7 @@ socket_sendto(Socket* socket, char* buf, int buf_size)
     } else {
       o_log(O_LOG_ERROR, "socket(%s): Sending data failed: %s\n",
             self->name, strerror(errno));
+      self->is_connected = 0;
       return -1;
     }
 
