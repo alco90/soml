@@ -96,11 +96,10 @@ net_stream_new(const char *transport, const char *hostname, const char *service)
   logdebug("%s: Created OmlNetOutStream\n", self->dest);
   socket_set_non_blocking_mode(1);
 
-  /* // Now see if we can connect to server */
-  /* if (! open_socket(self)) { */
-  /*   free(self); */
-  /*   return NULL; */
-  /* } */
+  if (open_socket(self) < 0) {
+    oml_free(self);
+    return NULL;
+  }
 
   self->write = net_stream_write;
   self->close = net_stream_close;
@@ -154,34 +153,36 @@ static int
 open_socket(OmlNetOutStream* self)
 {
   struct sigaction new_action, old_action;
+  Socket* sock;
 
   if(self->socket) {
     socket_free(self->socket);
     self->socket = NULL;
   }
-  if (strcmp(self->protocol, "tcp") == 0) {
-    Socket* sock;
-    if ((sock = socket_tcp_out_new(self->dest, self->host, self->service)) == NULL) {
-      return -1;
-    }
-
-    self->socket = sock;
-    self->header_written = 0;
-  } else {
+  if (strcmp(self->protocol, "tcp") != 0) {
     logerror("%s: Unsupported transport protocol '%s'\n", self->dest, self->protocol);
     return -1;
-  }
 
-  // Catching SIGPIPE signals if the associated socket is closed
-  // TODO: Not exactly sure if this is completely right for all application situations.
-  new_action.sa_handler =signal_handler;
-  sigemptyset (&new_action.sa_mask);
-  new_action.sa_flags = 0;
+  } else if ((sock = socket_tcp_out_new(self->dest, self->host, self->service)) == NULL) {
+    logerror("%s: Cannot create OSocket\n", self->dest);
+    return -1;
 
-  sigaction (SIGPIPE, NULL, &old_action);
-  /* XXX: Shouldn't we set up the handler ONLY if the old one is SIG_IGN? */
-  if (old_action.sa_handler != SIG_IGN) {
-    sigaction (SIGPIPE, &new_action, NULL);
+  } else {
+    self->socket = sock;
+    self->header_written = 0;
+
+    // Catching SIGPIPE signals if the associated socket is closed
+    // TODO: Not exactly sure if this is completely right for all application situations.
+    new_action.sa_handler = signal_handler;
+    sigemptyset (&new_action.sa_mask);
+    new_action.sa_flags = 0;
+
+    sigaction (SIGPIPE, NULL, &old_action);
+    /* XXX: Shouldn't we set up the handler ONLY if the old one is SIG_IGN? */
+    if (old_action.sa_handler != SIG_IGN) {
+      sigaction (SIGPIPE, &new_action, NULL);
+    }
+
     return 0;
   }
 
@@ -199,14 +200,6 @@ static size_t
 net_stream_write(OmlOutStream* hdl, uint8_t* buffer, size_t  length, uint8_t* header, size_t  header_length)
 {
   OmlNetOutStream* self = (OmlNetOutStream*)hdl;
-
-  while (self->socket == NULL) {
-    logdebug ("%s: Connecting to server\n", self->dest);
-    if (open_socket(self) < 0) {
-      logdebug("%s: Connection attempt failed\n", self->dest);
-      return 0;
-    }
-  }
 
   size_t count;
   if (! self->header_written) {
@@ -252,7 +245,6 @@ socket_write(OmlNetOutStream* self, uint8_t* buffer, size_t  length)
 
   if (result == -1 && socket_is_disconnected (self->socket)) {
     logwarn ("%s: Connection lost\n", self->dest);
-    self->socket = NULL;      // Server closed the connection
   }
   return result;
 }
