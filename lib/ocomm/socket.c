@@ -272,21 +272,16 @@ socket_in_new(const char* name, const char* node, const char* service, int is_tc
   return (Socket*)list;
 }
 
-/** Connect the socket to remote peer.
- *
- * If addr is NULL, assume the servAddr is already populated, and ignore port.
+/** Resolve the destination for an outgoing OSocket
  *
  * \param self OComm socket to use
  * \return 0 on success, -1 on error
  */
 static int
-s_connect(SocketInt* self)
+s_resolve(SocketInt* self)
 {
-  char name[SOCKNAMELEN];
   struct addrinfo hints;
   int ret;
-
-  *name = 0;
 
   memset(&hints, 0, sizeof(struct addrinfo));
   /* XXX: This should be pulled up when we support UDP and/or multicast */
@@ -299,15 +294,37 @@ s_connect(SocketInt* self)
     return -1;
   }
 
+  if(self->results) {
+    freeaddrinfo(self->results);
+  }
+
+  o_log(O_LOG_DEBUG, "socket(%s): Resolving %s:%s\n",
+      self->name, self->dest, self->service);
+  if ((ret=getaddrinfo(self->dest, self->service, &hints, &self->results))) {
+    o_log(O_LOG_ERROR, "socket(%s): Error resolving %s:%s: %s\n",
+        self->name, self->dest, self->service, gai_strerror(ret));
+    return -1;
+  }
+  self->rp = self->results;
+
+  return 0;
+}
+
+/** Connect the socket to remote peer.
+ *
+ * \param self OComm socket to use
+ * \return 0 on success, -1 on error
+ */
+static int
+s_connect(SocketInt* self)
+{
+  char name[SOCKNAMELEN];
+  *name = 0;
+
   if (!self->rp) {
-    o_log(O_LOG_DEBUG, "socket(%s): Resolving %s:%s\n",
-        self->name, self->dest, self->service);
-    if ((ret=getaddrinfo(self->dest, self->service, &hints, &self->results))) {
-      o_log(O_LOG_ERROR, "socket(%s): Error resolving %s:%s: %s\n",
-          self->name, self->dest, self->service, gai_strerror(ret));
+    if(s_resolve(self) < 0) {
       return -1;
     }
-    self->rp = self->results;
   }
 
   for (; self->rp != NULL; self->rp = self->rp->ai_next) {
@@ -335,18 +352,17 @@ s_connect(SocketInt* self)
         fcntl(self->sockfd, F_SETFL, O_NONBLOCK);
       }
 
-      if (0 != connect(self->sockfd, self->rp->ai_addr, self->rp->ai_addrlen)) {
+      if (0 == connect(self->sockfd, self->rp->ai_addr, self->rp->ai_addrlen)) {
+        o_log(O_LOG_DEBUG, "socket(%s): Connected to %s: %s\n",
+            self->name, name, strerror(errno));
+        self->is_connected = 1;
+        return 0;
+
+      } else {
         switch(errno) {
         case EINPROGRESS:
-          o_log(O_LOG_WARN, "socket(%s): Connection did not succeed immediately: %s\n",
-              self->name, name, strerror(errno));
-          /* XXX refactor */
-          self->is_connected = 1;
-          return 0;
-          break;
-
         case EALREADY:
-          o_log(O_LOG_WARN, "socket(%s): Still not connected: %s\n",
+          o_log(O_LOG_DEBUG, "socket(%s): Connection to %s in progress: %s\n",
               self->name, name, strerror(errno));
           self->is_connected = 1;
           return 0;
@@ -357,26 +373,12 @@ s_connect(SocketInt* self)
               self->name, name, strerror(errno));
           break;
         }
-
-      } else {
-        if (!nonblocking_mode) {
-          o_log(O_LOG_DEBUG, "socket(%s): Connected to %s\n",
-              self->name, name);
-        }
-        self->is_connected = 1;
-
-        /* Get ready to try the next addrinfo in case this one failed */
-        //self->rp = self->rp->ai_next;
-        return 0;
-
       }
     }
   }
   o_log(O_LOG_WARN, "socket(%s): Failed to connect\n",
       self->name, self->dest, self->service);
 
-  freeaddrinfo(self->results);
-  self->results = NULL;
   return -1;
 }
 
@@ -404,6 +406,10 @@ socket_tcp_out_new(const char* name, const char* dest, const char* service)
   self->dest = oml_strndup(dest, strlen(dest));
   self->service = oml_strndup(service, strlen(service));
 
+  if(s_resolve(self) < 0) {
+    socket_free((Socket*)self);
+    return NULL;
+  }
 
   //  eventloop_on_out_channel((Socket*)self, on_self_connected, NULL);
   return (Socket*)self;
