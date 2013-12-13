@@ -237,6 +237,7 @@ _bw_push(BufferedWriterHdl instance, uint8_t* data, size_t size)
     chunk = self->writerChunk = getNextWriteChunk(self, chunk);
   }
 
+  logdebug("%s: Pushing data into chunk %p\n", __FUNCTION__, chunk);
   if (mbuf_write(chunk->mbuf, data, size) < 0) {
     return -1;
   }
@@ -337,6 +338,7 @@ bw_get_write_buf(BufferedWriterHdl instance, int exclusive)
 
   }
 
+  logdebug("%s: MBuffer for chunk %p acquired (excl: %d)\n", __FUNCTION__, chunk, exclusive);
   if (!exclusive || !mbuf) { /* Don't hold the lock if no write buffer was found */
     oml_unlock(&self->lock, __FUNCTION__);
   }
@@ -355,6 +357,7 @@ bw_unlock_buf(BufferedWriterHdl instance)
   BufferedWriter* self = (BufferedWriter*)instance;
   pthread_cond_signal(&self->semaphore); /* assume we locked for a reason */
   oml_unlock(&self->lock, __FUNCTION__);
+  logdebug("%s: MBuffer released\n", __FUNCTION__);
 }
 
 /** Find the next empty write chunk, sets self->writerChunk to it and returns it.
@@ -544,6 +547,8 @@ processChunk(BufferedWriter* self, BufferChunk* chunk)
       return chunk->next;
     }
   }
+
+  logdebug("%s: Processing chunk %p\n", __FUNCTION__, chunk);
 
   MBuffer* meta = self->meta_buf;
 
