@@ -41,6 +41,7 @@ typedef struct BufferChunk {
   size_t   targetBufSize;
 
   /** Set to 1 when the reader is processing this chunk */
+  /* XXX: This really should be a mutex */
   int   reading;
 } BufferChunk;
 
@@ -85,7 +86,7 @@ static BufferChunk* getNextWriteChunk(BufferedWriter* self, BufferChunk* current
 static BufferChunk* createBufferChunk(BufferedWriter* self);
 static int destroyBufferChain(BufferedWriter* self);
 static void* threadStart(void* handle);
-static int processChunk(BufferedWriter* self, BufferChunk* chunk);
+static BufferChunk* processChunk(BufferedWriter* self, BufferChunk* chunk);
 
 /** Create a BufferedWriter instance
  *
@@ -471,54 +472,71 @@ destroyBufferChain(BufferedWriter* self) {
 /** Writing thread
  *
  * \param handle the stream to use the filters on
- * \return NULL on error; this function should not return
+ * \return NULL
  */
 static void*
 threadStart(void* handle)
 {
   BufferedWriter* self = (BufferedWriter*)handle;
-  BufferChunk* chunk = self->firstChunk;
+  BufferChunk* chunk = self->firstChunk, *next_chunk = NULL;
 
   while (self->active) {
     oml_lock(&self->lock, "bufferedWriter");
     pthread_cond_wait(&self->semaphore, &self->lock);
-    // Process all chunks which have data in them
-    while(1) {
-      if (mbuf_message(chunk->mbuf) > mbuf_rdptr(chunk->mbuf)) {
-        processChunk(self, chunk);
+
+    /* Process all chunks which have data in them, stop when we caught up to
+     * the writer, or when a soft (e.g. no data sent) or hard (e.g., cannot
+     * resolve) error occurred.
+     */
+    do {
+      next_chunk = processChunk(self, chunk);
+      if (next_chunk && next_chunk != chunk) {
+        chunk = next_chunk;
+      } else {
+        break;
       }
-      // stop if we caught up to the writer
-
-      if (chunk == self->writerChunk) break;
-
-      chunk = chunk->next;
-    }
+    } while(chunk != self->writerChunk);
     oml_unlock(&self->lock, "bufferedWriter");
   }
+
   /* Drain this writer before terminating */
-  while (!processChunk(self, chunk));
+  do {
+    next_chunk = processChunk(self, chunk);
+    if (next_chunk && next_chunk != chunk) {
+      chunk = next_chunk;
+    } else {
+      break;
+    }
+  } while(chunk != self->writerChunk);
+
   return NULL;
 }
 
 /** Send data contained in one chunk.
  *
  * \param self BufferedWriter to process
- * \param chunk link of the chunk to process
+ * \param chunk link of the chunk to process (can be NULL)
  *
- * \return 1 if chunk has been fully sent, 0 otherwise, -1 on error
+ * \return a pointer to the next chunk to process (can be chunk in case of failure), or NULL on error
  * \see oml_outs_write_f
  */
-static int
+static BufferChunk*
 processChunk(BufferedWriter* self, BufferChunk* chunk)
 {
   assert(self);
   assert(self->meta_buf);
-  assert(chunk);
+
+  if(!chunk) {
+    return NULL;
+  }
   assert(chunk->mbuf);
 
   uint8_t* buf = mbuf_rdptr(chunk->mbuf);
   size_t size = mbuf_message_offset(chunk->mbuf) - mbuf_read_offset(chunk->mbuf);
   size_t sent = 0;
+
+      if (mbuf_message(chunk->mbuf) > mbuf_rdptr(chunk->mbuf)) {
+      }
 
   MBuffer* meta = self->meta_buf;
 
@@ -527,7 +545,7 @@ processChunk(BufferedWriter* self, BufferChunk* chunk)
   time(&now);
   if (difftime(now, self->last_failure_time) < self->backoff) {
     logdebug("%s: Still in back-off period (%ds)\n", self->outStream->dest, self->backoff);
-    return 0;
+    return chunk;
   }
 
   chunk->reading = 1;
@@ -543,13 +561,14 @@ processChunk(BufferedWriter* self, BufferChunk* chunk)
       }
 
     } else if (cnt == 0) {
-        logdebug("%s: Did not send anything\n", self->outStream->dest);
-        break;
+      logdebug("%s: Did not send anything\n", self->outStream->dest);
+      chunk->reading = 0;
+      return chunk;
 
     } else if(self->backoff && !self->active) {
       logwarn("%s: Error sending while draining queue; giving up...\n", self->outStream->dest);
       chunk->reading = 0;
-      return -1;
+      return NULL;
 
     } else {
       /* To be on the safe side, we rewind to the beginning of the
@@ -567,7 +586,7 @@ processChunk(BufferedWriter* self, BufferChunk* chunk)
       logwarn("%s: Error sending, backing off for %ds\n", self->outStream->dest, self->backoff);
 
       chunk->reading = 0;
-      return 0;
+      return chunk;
     }
   }
 
@@ -578,9 +597,9 @@ processChunk(BufferedWriter* self, BufferChunk* chunk)
   chunk->reading = 0;
   if (mbuf_write_offset(chunk->mbuf) == mbuf_read_offset(chunk->mbuf)) {
     mbuf_clear2(chunk->mbuf, 1);
-    return 1;
+    return chunk->next;
   }
-  return 0;
+  return chunk;
 }
 
 /*
