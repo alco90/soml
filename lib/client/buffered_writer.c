@@ -535,8 +535,15 @@ processChunk(BufferedWriter* self, BufferChunk* chunk)
   size_t size = mbuf_message_offset(chunk->mbuf) - mbuf_read_offset(chunk->mbuf);
   size_t sent = 0;
 
-      if (mbuf_message(chunk->mbuf) > mbuf_rdptr(chunk->mbuf)) {
-      }
+  /* Skip this buffer if there is nothing to read,
+   * but don't advance if the chunk is the currently written one */
+  if (size <= 0) {
+    if (chunk == self->writerChunk) {
+      return chunk;
+    } else {
+      return chunk->next;
+    }
+  }
 
   MBuffer* meta = self->meta_buf;
 
