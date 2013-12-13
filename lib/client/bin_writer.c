@@ -108,6 +108,8 @@ bin_writer_new(OmlOutStream* out_stream)
 
   self->msgtype = OMB_DATA_P; // Short packets.
 
+  self->mbuf = mbuf_create();
+
   return (OmlWriter*)self;
 }
 
@@ -150,9 +152,6 @@ owb_row_cols(OmlWriter* writer, OmlValue* values, int value_count)
 {
   OmlBinWriter* self = (OmlBinWriter*)writer;
   MBuffer* mbuf;
-  if ((mbuf = self->mbuf) == NULL) {
-    return 0; /* previous use of mbuf failed */
-  }
 
   int cnt = marshal_values(mbuf, values, value_count);
   return cnt == value_count;
@@ -176,13 +175,8 @@ owb_row_start(OmlWriter* writer, OmlMStream* ms, double now)
   OmlBinWriter* self = (OmlBinWriter*)writer;
   assert(self->bufferedWriter != NULL);
 
-  MBuffer* mbuf;
-  if ((mbuf = self->mbuf = bw_get_write_buf(self->bufferedWriter, 1)) == NULL) {
-    return 0;
-  }
-
-  marshal_init (mbuf, self->msgtype);
-  marshal_measurements(mbuf, ms->index, ms->seq_no, now);
+  marshal_init (self->mbuf, self->msgtype);
+  marshal_measurements(self->mbuf, ms->index, ms->seq_no, now);
   return 1;
 }
 
@@ -198,9 +192,6 @@ owb_row_end(OmlWriter* writer, OmlMStream* ms) {
   (void)ms;
   OmlBinWriter* self = (OmlBinWriter*)writer;
   MBuffer* mbuf;
-  if ((mbuf = self->mbuf) == NULL) {
-    return 0; /* previous use of mbuf failed */
-  }
 
   marshal_finalize(self->mbuf);
   if (marshal_get_msgtype (self->mbuf) == OMB_LDATA_P) {
@@ -224,14 +215,20 @@ owb_row_end(OmlWriter* writer, OmlMStream* ms) {
      * OmlOutStream (oml_outs_write_f), this require a much bigger refactoring.
      * It is also duplicated with the OmlTextWriter (see #1101).
      */
-    _bw_push_meta(self->bufferedWriter,
-        mbuf_message(self->mbuf), mbuf_message_length(self->mbuf));
+    if(_bw_push_meta(self->bufferedWriter,
+        mbuf_message(self->mbuf), mbuf_message_length(self->mbuf)) < 0) {
+      logerror("Failed to push headers");
+    }
   }
 
-  mbuf_begin_write(mbuf);
+  if(bw_push(self->bufferedWriter,
+        mbuf_message(self->mbuf), mbuf_message_length(self->mbuf)) < 0) {
+      logerror("Failed to push data");
+  }
 
-  self->mbuf = NULL;
-  bw_unlock_buf(self->bufferedWriter);
+  mbuf_read_skip(self->mbuf, mbuf_message_length(self->mbuf));
+
+
   return 1;
 }
 
@@ -253,6 +250,7 @@ owb_close(OmlWriter* writer)
 
   // Blocks until the buffered writer drains
   bw_close (self->bufferedWriter);
+  mbuf_destroy(self->mbuf);
   oml_free(self);
 
   return next;

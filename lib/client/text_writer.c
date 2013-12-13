@@ -97,6 +97,7 @@ text_writer_new(OmlOutStream* out_stream)
   self->out = owt_row_cols;
   self->close = owt_close;
 
+  self->mbuf = mbuf_create();
 
   return (OmlWriter*)self;
 }
@@ -299,9 +300,6 @@ owt_row_start(OmlWriter* writer, OmlMStream* ms, double now)
   assert(self->bufferedWriter != NULL);
 
   MBuffer* mbuf;
-  if ((mbuf = self->mbuf = bw_get_write_buf(self->bufferedWriter, 1)) == NULL) {
-    return 0;
-  }
 
   mbuf_begin_write(mbuf);
   if (mbuf_print(mbuf, "%f\t%d\t%ld", now, ms->index, ms->seq_no)) {
@@ -321,13 +319,10 @@ owt_row_end(OmlWriter* writer, OmlMStream* ms)
   (void)ms;
   OmlTextWriter* self = (OmlTextWriter*)writer;
   MBuffer* mbuf;
-  if ((mbuf = self->mbuf) == NULL) {
-    return 0; /* previous use of mbuf failed */
-  }
 
   int res;
-  if ((res = mbuf_write(mbuf, (uint8_t*)"\n", 1)) != 0) {
-    mbuf_reset_write(mbuf);
+  if ((res = mbuf_write(self->mbuf, (uint8_t*)"\n", 1)) != 0) {
+    mbuf_reset_write(self->mbuf);
 
   } else {
     // success, lock in message
@@ -352,11 +347,14 @@ owt_row_end(OmlWriter* writer, OmlMStream* ms)
           mbuf_message(self->mbuf), mbuf_message_length(self->mbuf));
     }
 
-    mbuf_begin_write (mbuf);
+    mbuf_begin_write (self->mbuf);
   }
 
-  self->mbuf = NULL;
-  bw_unlock_buf(self->bufferedWriter);
+  if(bw_push(self->bufferedWriter,
+        mbuf_message(self->mbuf), mbuf_message_length(self->mbuf)) < 0) {
+    logerror("Failed to push data");
+  }
+
   return res == 0;
 }
 
