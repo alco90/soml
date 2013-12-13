@@ -481,7 +481,7 @@ static void*
 threadStart(void* handle)
 {
   BufferedWriter* self = (BufferedWriter*)handle;
-  BufferChunk* chunk = self->firstChunk, *next_chunk = NULL;
+  BufferChunk* chunk = self->firstChunk, *next_chunk = NULL, *start_chunk = NULL;
 
   while (self->active) {
     oml_lock(&self->lock, "bufferedWriter");
@@ -503,14 +503,17 @@ threadStart(void* handle)
   }
 
   /* Drain this writer before terminating */
+  self->writerChunk = NULL;
+  start_chunk = chunk;
   do {
     next_chunk = processChunk(self, chunk);
     if (next_chunk && next_chunk != chunk) {
       chunk = next_chunk;
+      /* XXX: we don't handle the case next_chunk == chunk on the first chunk, which causes the loop to stop */
     } else {
       break;
     }
-  } while(chunk != self->writerChunk);
+  } while(chunk != start_chunk);
 
   return NULL;
 }
