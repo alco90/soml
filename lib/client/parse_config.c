@@ -553,7 +553,7 @@ parse_filter (xmlNodePtr el, OmlMStream* ms, OmlMP* mp)
     f = create_default_filter(def, ms, index);
   } else {
     const char* name = (rename != NULL) ? (char*)rename : def->name;
-    f = create_filter((const char*)operation, name, def->param_types, index);
+    f = create_filter((const char*)operation, name, def->param_types, def->relations, index);
   }
   if (f != NULL) {
     f = parse_filter_properties(el, f);

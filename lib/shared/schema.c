@@ -121,7 +121,66 @@
 #include "schema.h"
 #include "oml_util.h"
 
-/** Parse a schema field like '<name>:<type>' into a struct schema_field.
+/** Add an Semantic-OML concept.
+ *
+ * \param meta nil-terminated string to parse
+ * \param list list of concepts to add
+ * \param element to add
+ * \return 0 on success, -1 on failure.
+ * \author Mario Poyato Pino <mario.poyato@estudiante.uam.es>
+ */
+void
+add_oml_sem_def(OMLSemDef **list,OMLSemDef *element)
+{
+    if (!*list) // if empty list
+        *list = element;
+    else
+    {
+        element->next = (*list)->next;
+        (*list)->next = element;
+    }
+    return ;
+}
+
+/** Parse an Semantic-OML concept.
+ *
+ * \param meta nil-terminated string to parse
+ * \param list list of concepts to add
+ * \param element to add
+ * \return 0 on success, -1 on failure.
+ * \author Mario Poyato Pino <mario.poyato@estudiante.uam.es>
+ */
+static OMLSemDef *
+sem_to_mpdef(const char *cs, int *ncs)
+{
+  OMLSemDef *osdp=NULL,*last_osdp;
+  const char *csp;
+  int len = strlen(cs);
+  // Walk all characters of the string concepts
+  cs=(char*)find_charn(cs,'{',len);
+  while (cs&&*cs=='{')
+  {
+    last_osdp = (OMLSemDef*)oml_malloc(sizeof(OMLSemDef));
+    csp = (char*)find_charn(++cs, '|', --len);
+    last_osdp->subject = oml_strndup(cs,csp-cs);
+    len -= csp+1-cs;
+    cs = csp+1;
+    csp = (char*)find_charn(cs, '|', len);
+    last_osdp->verb = oml_strndup(cs,csp-cs);
+    len -= csp+1-cs;
+    cs = csp+1;
+    csp = (char*)find_charn(cs, '}', len);
+    last_osdp->predicate = oml_strndup(cs,csp-cs);
+    len -= csp+1-cs;
+    cs = csp+1;
+    last_osdp->next = NULL;
+    add_oml_sem_def(&osdp,last_osdp);
+    (*ncs)++;
+  }
+  return osdp;
+}
+
+/** Parse a schema field like '<name>:<type>:<concepts>' into a struct schema_field.
  *
  * \param meta nil-terminated string to parse
  * \param len length to parse in the string
@@ -131,14 +190,26 @@
 int
 schema_field_from_meta (const char *meta, size_t len, struct schema_field *field)
 {
-  char *type = NULL;
+  char *type = NULL,*concepts=NULL;
   memset(field, 0, sizeof(struct schema_field));
-  const char *p = meta, *q = (char*)find_charn (p, ':', len);
+  const char *p = meta, *q = (char*)find_charn (p, ':', len),*t;
   if (!q) {
     return -1;
   }
   field->name = oml_strndup (p, q++ - p);
-  type = oml_strndup (q, len - (q - p));
+  field->concepts = NULL;
+  field->nconcepts = 0;
+  // Check if meta has concepts
+  if ((t=(char*)find_charn(q,':',len - (q - p))) != NULL)
+  {
+    type = oml_strndup (q, t-q);
+    concepts = (len-(t-p) > 0) ? oml_strndup(t,len-(t-p)) : NULL;
+    field->concepts = (concepts&&*concepts) ? sem_to_mpdef(concepts,&field->nconcepts) : NULL;
+    if (field->concepts == NULL)
+      field->nconcepts = 0;
+  }
+  else
+    type = oml_strndup (q, len - (q - p));
   if (!field->name || !type) {
     goto exit;
   }
@@ -465,6 +536,7 @@ schema_from_sql (const char *sql, OmlValueT (*t2o) (const char *s))
         oml_free (fields[nfields].name);
         fields[nfields].name = NULL;
       }
+      fields[nfields].concepts = NULL;
       nfields += n;
       p = ++q;
     }
@@ -513,6 +585,21 @@ schema_new (const char *name)
   return NULL;
 }
 
+OMLSemDef *
+destroy_sem_concepts(OMLSemDef *sd)
+{
+    OMLSemDef *sd_aux = NULL;
+    if (sd)
+    {
+        oml_free(sd->subject);
+        oml_free(sd->subject);
+        oml_free(sd->predicate);
+        sd_aux = sd->next;
+        oml_free(sd);
+    }
+    return sd_aux;
+}
+
 /** Free an allocated schema structures
  * \param schema schema structure to free
  */
@@ -553,6 +640,7 @@ schema_add_field (struct schema *schema, const char *name, OmlValueT type)
   schema->fields = new;
   schema->fields[schema->nfields].name = oml_strndup (name, strlen (name));
   schema->fields[schema->nfields].type = type;
+  schema->fields[schema->nfields].concepts = NULL;
   if (!schema->fields[schema->nfields].name) return -1;
   schema->nfields += 1;
   return 0;
@@ -566,6 +654,7 @@ schema_add_field (struct schema *schema, const char *name, OmlValueT type)
 struct schema*
 schema_copy (const struct schema *schema)
 {
+  OMLSemDef*osd,*new_osd;
   struct schema *new;
   int i;
   if (!schema) { return NULL; }
@@ -585,6 +674,20 @@ schema_copy (const struct schema *schema)
     new->fields[i].name = oml_strndup (schema->fields[i].name, strlen (schema->fields[i].name));
     if (!new->fields[i].name) {
       goto exit;
+    }
+    new->fields[i].concepts = NULL;
+    new->fields[i].nconcepts = 0;
+    osd = schema->fields[i].concepts;
+    while(osd!=NULL)
+    {
+        new_osd = (OMLSemDef*)oml_malloc(sizeof(OMLSemDef));
+        new_osd->subject = oml_strndup (osd->subject, strlen (osd->subject));
+        new_osd->verb = oml_strndup (osd->verb, strlen (osd->verb));
+        new_osd->predicate = oml_strndup (osd->predicate, strlen (osd->predicate));
+        new_osd->next = NULL;
+        add_oml_sem_def(&new->fields[i].concepts,new_osd);
+        (new->fields[i].nconcepts)++;
+        osd = osd->next;
     }
     new->fields[i].type = schema->fields[i].type;
   }
@@ -633,7 +736,6 @@ schema_diff (struct schema *s1, struct schema *s2)
   if (s1 == s2) return 0;
   if (!s1 || !s2) return -1;
   if (strcmp (s1->name, s2->name)) return -1;
-
   if (s1->fields && s2->fields) {
 
     if (s1->nfields != s2->nfields) { diffn=1; }

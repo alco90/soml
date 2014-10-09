@@ -156,10 +156,10 @@ meta_to_file (const char *key, const char *value, const char *mpname, const char
 }
 
 static OmlMPDef mpdef [] = {
-  { "label", OML_STRING_VALUE },
-  { "seq", OML_UINT32_VALUE },
-  { "blob", OML_BLOB_VALUE },
-  { NULL, (OmlValueT)0 }
+  { "label", OML_STRING_VALUE, NULL },
+  { "seq", OML_UINT32_VALUE, NULL },
+  { "blob", OML_BLOB_VALUE, NULL },
+  { NULL, (OmlValueT)0, NULL }
 };
 
 OmlMP *mp;

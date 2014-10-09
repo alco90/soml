@@ -70,6 +70,8 @@
 #include <libpq-fe.h>
 #include "psql_adapter.h"
 #endif
+#include "fuseki_adapter.h"
+#include "virtuoso_adapter.h"
 
 #define DEF_COLUMN_COUNT 1
 #define DEF_TABLE_COUNT 1
@@ -84,6 +86,8 @@ static struct db_backend
 #if HAVE_LIBPQ
     { "postgresql", psql_create_database },
 #endif
+    { "fuseki", fuseki_create_database },
+    { "virtuoso", virtuoso_create_database },
   };
 
 char* dbbackend = DEFAULT_DB_BACKEND;
@@ -140,6 +144,10 @@ database_setup_backend (const char* backend)
   } else if (!strcmp (backend, "postgresql")) {
     if(psql_backend_setup ()) return -1;
 #endif
+  } else if (!strcmp (backend, "fuseki")) {
+    if(fuseki_backend_setup ()) return -1;
+  } else if (!strcmp (backend, "virtuoso")) {
+    if(virtuoso_backend_setup ()) return -1;
   }
   return 0;
 }
@@ -407,7 +415,7 @@ database_find_or_create_table(Database *database, struct schema *schema)
         return table;
 
       } else if (diff == -1) {
-        logerror ("%s: Recorded schema for table '%s' does not match the client schema\n", database->name, s->name);
+        logerror ("%s: Schema error table '%s'\n", database->name, s->name);
         logdebug (" One of the server schema %p or the client schema %p is probably NULL\n", s, table->schema);
 
       } else if (diff > 0) {
@@ -493,60 +501,7 @@ database_table_free(Database *database, DbTable *table)
 MString*
 database_make_sql_insert (Database *db, DbTable* table)
 {
-  MString* mstr = mstring_create ();
-  int n = 0, i = 0;
-  int max = table->schema->nfields;
-  char *pvar;
-
-  if (max <= 0) {
-    logerror ("%d: Trying to insert 0 values into table %s\n",
-        db->backend_name, table->schema->name);
-    goto fail_exit;
-  }
-
-  if (mstr == NULL) {
-    logerror("%d: Failed to create managed string for preparing SQL INSERT statement\n",
-        db->backend_name);
-    goto fail_exit;
-  }
-
-  /* Build SQL "INSERT INTO" statement */
-  n += mstring_sprintf (mstr,
-      "INSERT INTO \"%s\" (\"oml_sender_id\", \"oml_seq\", \"oml_ts_client\", \"oml_ts_server\"",
-      table->schema->name);
-
-  /* Add specific column names */
-  for (i=0; i<max; i++) {
-    n += mstring_sprintf (mstr, ", \"%s\"", table->schema->fields[i].name);
-  }
-
-  /* Close column names, and add variables for the prepared statement */
-  pvar = db->prepared_var(db, 1);
-  n += mstring_sprintf (mstr, ") VALUES (%s", pvar);
-  oml_free(pvar); /* XXX: Not really efficient, but we only do this rarely */
-
-  max += 4; /* Number of metadata columns we want to be able to insert */
-  for (i=2; i<=max; i++) {
-    pvar = db->prepared_var(db, i);
-    n += mstring_sprintf (mstr, ", %s", pvar);
-    oml_free(pvar);
-  }
-
-  /* We're done */
-  n += mstring_cat (mstr, ");");
-
-  logdebug2("%s:%s: Prepared insert statement for table %s: %s\n",
-      db->backend_name, db->name, table->schema->name, mstring_buf(mstr));
-
-  if (n != 0) {
-    /* mstring_* return -1 on error, with no error, the sum in n should be 0 */
-    goto fail_exit;
-  }
-  return mstr;
-
- fail_exit:
-  if (mstr) mstring_delete (mstr);
-  return NULL;
+    return db->prepare(db,table);
 }
 
 /** Initialise adapters for a new database
@@ -563,47 +518,50 @@ database_init (Database *database)
 {
   int num_tables;
   TableDescr* tables = database->get_table_list (database, &num_tables);
-  TableDescr* td = tables;
+  if (!database->semantic)
+  {
+    TableDescr* td = tables;
 
-  if (num_tables == -1)
-    return -1;
+    if (num_tables == -1)
+      return -1;
 
-  logdebug("%s: Got table list with %d tables in it\n", database->name, num_tables);
-  int i = 0;
-  for (i = 0; i < num_tables; i++, td = td->next) {
-    if (td->schema) {
-      struct schema *schema = schema_copy (td->schema);
-      DbTable *table = database_create_table (database, schema);
+    logdebug("%s: Got table list with %d tables in it\n", database->name, num_tables);
+    int i = 0;
+    for (i = 0; i < num_tables; i++, td = td->next) {
+      if (td->schema) {
+        struct schema *schema = schema_copy (td->schema);
+        DbTable *table = database_create_table (database, schema);
 
-      if (!table) {
-        logwarn ("%s: Failed to create table '%s'\n",
-                 database->name, td->name);
-        continue;
-      }
-      /* Create the required table data structures, but don't do SQL CREATE TABLE */
-      if (database->table_create (database, table, 1) == -1) {
-        logwarn ("%s: Failed to create adapter structures for table '%s'\n",
-                 database->name, td->name);
-        database_table_free (database, table);
-      }
-    }
-  }
-
-  /* Create default tables if they are not already present in the 'tables' list */
-  const char *meta_tables [] = { "_senders", "_experiment_metadata" };
-  size_t j;
-  for (j = 0; j < LENGTH(meta_tables); j++) {
-    if (!table_descr_have_table (tables, meta_tables[j])) {
-      if (database->table_create_meta (database, meta_tables[j])) {
-        table_descr_list_free (tables);
-        logerror("%s: Could not create default table %s\n",
-            database->name, meta_tables[j]);
-        return -1;
+        if (!table) {
+          logwarn ("%s: Failed to create table '%s'\n",
+                   database->name, td->name);
+          continue;
+        }
+        /* Create the required table data structures, but don't do SQL CREATE TABLE */
+        if (database->table_create (database, table, 1) == -1) {
+          logwarn ("%s: Failed to create adapter structures for table '%s'\n",
+                   database->name, td->name);
+          database_table_free (database, table);
+        }
       }
     }
-  }
 
-  table_descr_list_free (tables);
+    /* Create default tables if they are not already present in the 'tables' list */
+    const char *meta_tables [] = { "_senders", "_experiment_metadata" };
+    size_t j;
+    for (j = 0; j < LENGTH(meta_tables); j++) {
+      if (!table_descr_have_table (tables, meta_tables[j])) {
+        if (database->table_create_meta (database, meta_tables[j])) {
+          table_descr_list_free (tables);
+          logerror("%s: Could not create default table %s\n",
+              database->name, meta_tables[j]);
+          return -1;
+        }
+      }
+    }
+
+    table_descr_list_free (tables);
+  }
   return 0;
 }
 

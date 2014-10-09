@@ -32,7 +32,30 @@ COPYRIGHT = "Copyright 2009-2014, NICTA"
 require 'stringio'
 require 'optparse'
 
+$VALIDATING_TXT = ""
+begin
+  require 'rdf/rdfxml'
+  $validating_concepts = true
+  $dir_ontology = nil
+  $VALIDATING_TXT = "with semantic concepts validating (Copyright 2013-2014, UAM)"
+  begin
+    require 'text'
+    $concept_sugestions = true
+    $correct_concepts = []
+    $white = Text::WhiteSimilarity.new
+  rescue LoadError
+    $VALIDATING_TXT = "Semantic sugestions will not be validated"
+    $concept_sugestions = false
+  end
+rescue LoadError
+  $VALIDATING_TXT = $VALIDATING_TXT + "semantic concepts will not be validated"
+  $validating_concepts = false
+end
+
 $integer_alias = :int32
+
+$sem_concepts = []
+#$max_sem = 0
 
 $types = {
   :boolean => {
@@ -197,6 +220,7 @@ $types[:flag] = $types[:boolean]
 # \see AppDefinition, AppDefinition::template, Property, MeasurementPoint, Metric
 def run()
   $stderr.puts "INFO\t#{VERSION_STRING} #{COPYRIGHT}"
+  $stderr.puts "INFO\t#{$VALIDATING_TXT}"
   if File.basename($PROGRAM_NAME) == 'oml2_scaffold'
     old = File.basename($PROGRAM_NAME)
     new = old.gsub('_', '-')
@@ -207,7 +231,7 @@ def run()
   opts.banner = %Q|
 Generate C code for an OML application from an application definition file
 
-  Usage: #{$0} [OPTIONS] [app_file]
+  Usage: #{$0} [OPTIONS] [app_file] [$dir_ontology]
 
 |
 
@@ -235,6 +259,10 @@ Generate C code for an OML application from an application definition file
   end
   opts.on(nil, "--oml",
       "Create the oml header file defining all measurement points") do
+    output << :oml
+  end
+  opts.on(nil, "--ontology",
+      "Get the ontology directory") do
     output << :oml
   end
   opts.on(nil, "--opts",
@@ -266,12 +294,13 @@ Generate C code for an OML application from an application definition file
     exit -1
   end
 
-  if rest.size > 1
+  if rest.size > 2
     $stderr.puts "ERROR\tToo many arguments"
     $stderr.write(opts.banner)
     exit -1
   end
   app_file = rest[0]
+  $dir_ontology = rest[1]
 
   # Backward-compatible mappings for deprecated integer types, others are set above
   $types[:integer] = $types[$integer_alias]
@@ -282,6 +311,10 @@ Generate C code for an OML application from an application definition file
       $stderr.puts "ERROR\tDon't specify app_file when asking to create one"
       exit -1
     end
+    unless $dir_ontology.nil?
+      $stderr.puts "ERROR\tDon't specify $dir_ontology when asking to create one"
+      exit -1
+    end
     uri = "#{ENV['USER']}:app:#{app_name}"
     ad = AppDefinition.new uri, app_name
     app_file = "#{app_name}.rb"
@@ -290,7 +323,17 @@ Generate C code for an OML application from an application definition file
       exit -1
     else
       File.open(app_file, 'w') do |f|
-	ad.write_app_def(f, app_file)
+        ad.write_app_def(f, app_file)
+      end
+    end
+    AppDefinition.remove ad
+    unless $dir_ontology.nil?
+      uri = "#{ENV['USER']}:app:#{$dir_ontology}"
+      ad = AppDefinition.new uri, $dir_ontology
+      app_file = "#{$dir_ontology}.rb"
+      if not File.directory?($dir_ontology) && !force
+        $stderr.puts "ERROR\tDirectory #{$dir_ontology} does not exist. Use --force to overwrite"
+        exit -1
       end
     end
     $stderr.puts "INFO\tCreated #{app_file}"
@@ -308,6 +351,12 @@ Generate C code for an OML application from an application definition file
   unless File.readable?(app_file)
     $stderr.puts "ERROR\tCan't find or open application description file #{app_file}"
     exit -1
+  end
+  unless $dir_ontology.nil? 
+    unless File.readable?($dir_ontology)
+      $stderr.puts "ERROR\tCan't find or open ontology directory #{$dir_ontology}"
+      exit -1
+    end
   end
   load(app_file)
   AppDefinition.each do |app|
@@ -453,7 +502,7 @@ class Property < Struct.new(:name, :description, :parameter, :options)
 end
 
 ## A single metric, and associated code generation
-class Metric < Struct.new(:name, :type, :opts)
+class Metric < Struct.new(:name, :type, :semantic, :opts)
   # Keep track of the deprecation warning we already displayed (one for each type)
   @@warnings = Hash.new
 
@@ -462,9 +511,10 @@ class Metric < Struct.new(:name, :type, :opts)
   # \param type type of the metric (Ruby/AppDef typology)
   # \param opts optional arguments; none are really supported right now...
   # \return a Metric
-  def initialize(name, type, opts = {})
+  def initialize(name, type, semantic, opts = {})
     super
     self.type = type.to_sym
+    self.semantic = semantic
   end
 
   ## Return the C type for a Ruby/AppDef type, issuing deprecation warning if needed.
@@ -549,19 +599,28 @@ class MeasurementPoint
 
   ## Implementation of defMetric, simply instantiate the Metric with the same arguments
   # \see Metric::initialize
-  def defMetric(name, type, opts = {})
-    @ms << Metric.new(name, type, opts)
+  def defMetric(name, type, opts = {}, semantic = {})
+    semantic = [] if (semantic.empty?)
+    @ms << Metric.new(name, type, semantic, opts)
   end
 
   ## Write MP definition out into a stream
   # \param stream stream to write header snippet into
   # \see Metric::c_type
   def write_oml_h(stream)
+    properties=[]
     stream.puts "static OmlMPDef oml_#{@name}_def[] = {"
     @ms.each do |m|
-      stream.puts "  {\"#{m.name}\", #{$types[m.type][:omltype]}},"
+      #unless m.semantic.empty?
+        properties.push({:name=>m.name,:concepts=>m.semantic})
+      #end
+      stream.puts "  {\"#{m.name}\", #{$types[m.type][:omltype]}, NULL},"
     end
-    stream.puts "  {NULL, (OmlValueT)0}"
+    $max_property = @ms.length
+    stream.puts "  {NULL, (OmlValueT)0, NULL}"
+    #unless properties.empty?
+      $sem_concepts.push({:name=>@name,:properties=>properties})
+    #end
     stream.puts "};"
   end
 
@@ -711,12 +770,180 @@ class AppDefinition
       mp.write_oml_h(stream)
     end
   end
+  
+  def get_concept(concept)
+    if concept .include? "http://www.etsi.org/isg/moi/data.owl#" or \
+        concept.include? "http://www.etsi.org/isg/moi/Metadata.owl#" or \
+        concept.include? "http://www.etsi.org/isg/moi/GeneralConcepts.owl#" or \
+        concept.include? "http://www.etsi.org/isg/moi/Units.owl#"
+      var = concept.gsub("http://www.etsi.org/isg/moi/data.owl#","MD:")
+      var = var.gsub("http://www.etsi.org/isg/moi/Metadata.owl#","MM:")
+      var = var.gsub("http://www.etsi.org/isg/moi/GeneralConcepts.owl#","MGC:")
+      var = var.gsub("http://www.etsi.org/isg/moi/Units.owl#","MU:")
+      return var
+    end
+    return nil
+  end
+  
+  def get_concept_namespace(concept)
+    return concept.partition(':').first
+  end
+
+  def get_concept_name(concept)
+    return concept.partition(':').last
+  end
+  
+  def get_ontology_file(concept)
+    case self.get_concept_namespace(concept)
+      when "MD"
+        return "MomentDataV2.owl"
+      when "MM"
+        return "MomentMetadata.owl"
+      when "MGC"
+        return "MomentGeneralConcepts.owl"
+      when "MU"
+        return "MomentUnits.owl"
+    end
+    return ""
+  end
+  
+  def write_oml_register_sem(stream,semantics,mp)
+    semantics.each do |concept|
+      if concept[:name] == mp.name
+        i = 0
+        concept[:properties].each do |property|
+          j = 0
+          num_concepts = property[:concepts].length
+          property[:concepts].each do |triple|
+            stream.puts "  concept = (char***)oml_malloc(sizeof(char**)*#{num_concepts});" if (j==0)
+            stream.puts "  concept[#{j}] = (char**)oml_malloc(sizeof(char*)*3);" if (triple.length > 0)
+            k = 0
+            #stream.puts "// #{concept[0]} -- #{concept[1]} -> #{concept[2]}"
+            if $validating_concepts
+              triple.each do |concept|
+                correct = 0
+                concept_lvdist_best = nil
+                dist_lvdist_best = -1
+                concept_white_best = nil
+                dist_white_best = -1
+                err = nil
+                warn = nil
+                if self.get_concept_namespace(concept) == "%value%" or $correct_concepts.include?(concept)
+                  correct = 1
+                else
+                  unless $dir_ontology.nil?
+                    file = self.get_ontology_file(concept)
+                    if file.eql?""
+                      warn = "namespace: #{self.get_concept_namespace(concept)} is not in the Moment Ontology."
+                      $stderr.puts "WARN\tNamespace: #{self.get_concept_namespace(concept)} is not in the Moment Ontology."
+                    else
+                      RDF::RDFXML::Reader.open("#{$dir_ontology}/#{file}") do |reader|
+                        reader.each_statement do |statement|
+                          subject = self.get_concept(statement.subject.to_s)
+                          object = self.get_concept(statement.object.to_s)
+                          predicate = self.get_concept(statement.predicate.to_s)
+                          if concept.eql? subject or concept.eql? object or concept.to_s.eql? predicate
+                            correct = 1
+                            $correct_concepts.push(concept)
+                          else
+                            if $concept_sugestions
+                              unless subject.nil?
+                                # Levenshtein similarity
+                                dist = Text::Levenshtein.distance(concept,subject)
+                                if dist < dist_lvdist_best or dist_lvdist_best == -1
+                                  concept_lvdist_best = subject
+                                  dist_lvdist_best = dist
+                                end
+                                # White similarity
+                                dist = $white.similarity(concept,subject)
+                                if dist > dist_white_best or dist_white_best == -1
+                                  concept_white_best = subject
+                                  dist_white_best = dist
+                                end
+                              end
+                              unless object.nil?
+                                # Levenshtein similarity
+                                dist = Text::Levenshtein.distance(concept,object)
+                                if dist < dist_lvdist_best or dist_lvdist_best == -1
+                                  concept_lvdist_best = object
+                                  dist_lvdist_best = dist
+                                end
+                                # White similarity
+                                dist = $white.similarity(concept,object)
+                                if dist > dist_white_best or dist_white_best == -1
+                                  concept_white_best = object
+                                  dist_white_best = dist
+                                end
+                              end
+                              unless predicate.nil?
+                                # Levenshtein similarity
+                                dist = Text::Levenshtein.distance(concept,predicate)
+                                if dist < dist_lvdist_best or dist_lvdist_best == -1
+                                  concept_lvdist_best = predicate
+                                  dist_lvdist_best = dist
+                                end
+                                # White similarity
+                                dist = $white.similarity(concept,predicate)
+                                if dist > dist_white_best or dist_white_best == -1
+                                  concept_white_best = predicate
+                                  dist_white_best = dist
+                                end
+                              end
+                            end
+                          end
+                        end
+                      end
+                      if correct == 0
+                        $stderr.puts "WARN\tConcept #{concept} is not in the Moment Ontology. Sugestions: \"#{concept_lvdist_best}\" or \"#{concept_white_best}\""
+                        warn = "Concept #{concept} is not in the Moment Ontology."
+                        if concept_lvdist_best.eql? concept_white_best
+                          err = " Sugestion: #{concept_lvdist_best}"
+                        else
+                          err = " Sugestions: #{concept_lvdist_best} or #{concept_white_best}"
+                        end
+                      end
+                    end
+                  end
+                end
+                if $concept_sugestions
+                  stream.puts "  // Warning: #{warn}#{err}" unless warn.nil? and err.nil?
+                else
+                  stream.puts "  // Warning: #{warn}" unless warn.nil?
+                end
+                stream.puts "  concept[#{j}][#{k}]=strdup(\"#{concept}\");"
+                if $concept_sugestions
+                  stream.puts "  logwarn(\"[SEMANTIC] #{warn}#{err}\");" unless warn.nil? and err.nil?
+                else
+                  stream.puts "  logwarn(\"[SEMANTIC] #{warn}\");" unless warn.nil?
+                end
+                k = k + 1
+              end
+            else
+              triple.each do |concept|
+                stream.puts "  concept[#{j}][#{k}]=strdup(\"#{concept}\");"
+                k = k + 1
+              end
+            end
+            #stream.puts "  concept[#{i}][#{j}]=\"#{triple[0]}|#{triple[1]}|#{triple[2]}\";"
+            j = j + 1
+          end
+          if property[:concepts].length > 0
+            stream.puts "  oml_#{mp.name}_def[#{i}].relations = oml_sem_register_concepts(concept, #{num_concepts});"
+            stream.puts "  for (i=0;i<#{num_concepts};i++)\n  {\n    for (j=0;j<3;j++)\n      free(concept[i][j]);\n    oml_free(concept[i]);\n  }"
+            stream.puts "  oml_free(concept);"
+          end
+          i = i + 1
+        end
+      end
+    end
+  end
 
   ## Write MP registration helper into a stream
   # \param stream stream to write header snippet into
   def write_oml_register(stream)
     @mps.each do |mp|
       n = mp.name
+      self.write_oml_register_sem(stream,$sem_concepts,mp)
       stream.puts "  g_oml_mps_#{template(:app_cstring)}->#{n} = omlc_add_mp(\"#{n}\", oml_#{n}_def);"
     end
   end
@@ -836,6 +1063,9 @@ typedef struct {
 
 
 #ifdef OML_FROM_MAIN
+
+extern OMLSemDef *oml_sem_register_concepts(char***concepts, int n);
+
 /*
  * Only declare storage once, usually from the main
  * source, where OML_FROM_MAIN is defined
@@ -847,6 +1077,8 @@ oml_mps_t* g_oml_mps_#{template(:app_cstring)} = &g_oml_mps_storage;
 static inline void
 oml_register_mps(void)
 {
+  int i,j;
+  char*** concept;// = (char***)oml_malloc(sizeof(char**)*#{$max_sem});
 #{template(:oml_register)}
 }
 
@@ -1125,7 +1357,7 @@ main(int argc, const char *argv[])
   ## Write example application definition
   # \param stream stream to write in, defaults to STDOUT
   # \see AppDefinition::template
-  def write_app_def(stream = $stdout, app_file="[FILENAME]")
+  def write_app_def(stream = $stdout, app_file="[FILENAME]", dir_ontology="[ONTOLOGY]")
     stream.puts %@# This file was automatically generated by #{VERSION_STRING}
 # The syntax of this file is documented at [0].
 #
@@ -1142,7 +1374,7 @@ is doing and useful for.
   app.path = "/usr/local/bin/#{template(:app_name)}"
 
   # Declare command-line arguments; generate Popt parser with
-  #  #{PROG} --opts #{app_file}
+  #  #{PROG} --opts #{app_file} #{dir_ontology}
   app.defProperty('loop', 'Create periodic result', '-l',
         :type => :boolean, :mnemonic => 'l')
   app.defProperty('delay', 'Delay between consecutive measurements', '-d',
@@ -1159,7 +1391,7 @@ is doing and useful for.
   }
 
   # Declare measurement points; generate OML injection helpers with
-  #  #{PROG} --oml #{app_file}
+  #  #{PROG} --oml #{app_file} --ontology #{dir_ontology}
   app.defMeasurement("sensor") do |mp|
     mp.defMetric('val', :int32)
     mp.defMetric('inverse', :double)

@@ -54,8 +54,8 @@ typedef struct MBuffer
   /** If true, allow resizing, otherwise fail */
   uint8_t  allow_resizing;
 
-  /** This used to be a 'next' pointer, kept like this not to risk breaking ABIs */
-  void* unused;
+  /** Supports chaining together of MBuffer instances */
+  struct MBuffer* next;
 } MBuffer;
 
 MBuffer* mbuf_create (void);

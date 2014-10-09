@@ -34,7 +34,7 @@ static int
 newwindow(OmlFilter* f);
 
 static int
-meta(OmlFilter* f, int param_index, char** namePtr, OmlValueT* type);
+meta(OmlFilter* f, int param_index, char** namePtr, OmlValueT* type, OMLSemDef **concepts);
 
 void*
 omlf_first_new(
@@ -122,7 +122,7 @@ newwindow(OmlFilter* f)
 }
 
 static int
-meta(OmlFilter* f, int param_index, char** namePtr, OmlValueT* type)
+meta(OmlFilter* f, int param_index, char** namePtr, OmlValueT* type, OMLSemDef **concepts)
 {
   InstanceData* self = (InstanceData*)f->instance_data;
 
@@ -130,6 +130,8 @@ meta(OmlFilter* f, int param_index, char** namePtr, OmlValueT* type)
 
   *namePtr = NULL;
   *type = self->result[0].type;
+  if(concepts)
+    *concepts = f->concepts;
   return 0;
 }
 

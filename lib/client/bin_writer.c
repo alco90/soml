@@ -51,7 +51,7 @@ typedef struct OmlBinWriter {
   /** \see OmlWriter::next */
   OmlWriter* next;
   /** \see OmlWriter::bufferedWriter */
-  BufferedWriter* bufferedWriter;
+  BufferedWriterHdl bufferedWriter;
 
   /*
    * Fields specific to the OmlBinWriter
@@ -60,8 +60,8 @@ typedef struct OmlBinWriter {
   /** Currently active MBuffer of the bufferedWriter chain */
   MBuffer* mbuf;
 
-  /** This used to be an 'OmlOutStream' pointer, kept like this not to risk breaking ABIs */
-  void* unused;
+  /** Output stream to write into, through teh bufferedWriter */
+  OmlOutStream* out_stream;
 
   /** Set to 1 when the writer is ready to use */
   int is_enabled;
@@ -97,6 +97,7 @@ bin_writer_new(OmlOutStream* out_stream)
 
   self->bufferedWriter = bw_create(out_stream,
       omlc_instance->max_queue, 0);
+  self->out_stream = out_stream;
 
   self->meta = owb_meta;
   self->header_done = owb_header_done;

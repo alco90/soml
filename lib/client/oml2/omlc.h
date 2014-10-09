@@ -629,6 +629,13 @@ typedef struct OmlValue {
 
 } OmlValue;
 
+typedef struct OMLSemDef {
+    char* subject;
+    char* verb;
+    char* predicate;
+    struct OMLSemDef* next;
+} OMLSemDef;
+
 /**
  * Definition of one field of an MP.
  *
@@ -640,6 +647,9 @@ typedef struct OmlMPDef {
 
   /** Type of the field */
   OmlValueT  param_types;
+
+  /** List of semantic concepts */
+  OMLSemDef* relations;
 
 } OmlMPDef;
 

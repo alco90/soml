@@ -25,7 +25,7 @@ static struct {
 } meta_tables[] = {
   { .name = "_experiment_metadata",
     .sql = NULL,
-    .schema = "0 _experiment_metadata subject:string key:string value:string",
+    .schema = "0 _experiment_metadata subject:string: key:string: value:string:",
   },
   { .name = "_senders",
     .sql = "CREATE TABLE _senders (name TEXT PRIMARY KEY, id INTEGER UNIQUE);",
@@ -144,8 +144,12 @@ dba_table_create_meta (Database *db, const char *name)
 int
 dba_begin_transaction (Database *db)
 {
-  const char sql[] = "BEGIN TRANSACTION;";
-  return db->stmt (db, sql);
+  if (!db->semantic)
+  {
+    const char sql[] = "BEGIN TRANSACTION;";
+    return db->stmt (db, sql);
+  }
+  else return 0;
 }
 
 /** Close the current transaction with the database server.
@@ -155,9 +159,13 @@ dba_begin_transaction (Database *db)
  */
 int
 dba_end_transaction (Database *db)
-{
-  const char sql[] = "END TRANSACTION;";
-  return db->stmt (db, sql);
+{  
+  if (!db->semantic)
+  {
+    const char sql[] = "END TRANSACTION;";
+    return db->stmt (db, sql);
+  }
+  else return 0;
 }
 
 /** Close the current transaction and start a new one.

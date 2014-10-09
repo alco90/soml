@@ -49,7 +49,7 @@ typedef struct OmlTextWriter {
   /** \see OmlWriter::next */
   OmlWriter* next;
   /** \see OmlWriter::bufferedWriter */
-  BufferedWriter* bufferedWriter;
+  BufferedWriterHdl bufferedWriter;
 
   /*
    * Fields specific to the OmlTextWriter
@@ -58,8 +58,8 @@ typedef struct OmlTextWriter {
   /** Currently active MBuffer of the bufferedWriter chain */
   MBuffer* mbuf;
 
-  /** This used to be an 'OmlOutStream' pointer, kept like this not to risk breaking ABIs */
-  void* unused;
+  /** Output stream to write into, through teh bufferedWriter */
+  OmlOutStream* out_stream;
 
 } OmlTextWriter;
 
@@ -88,6 +88,7 @@ text_writer_new(OmlOutStream* out_stream)
   memset(self, 0, sizeof(OmlTextWriter));
 
   self->bufferedWriter = bw_create(out_stream, omlc_instance->max_queue, 0);
+  self->out_stream = out_stream;
 
   self->meta = owt_meta;
   self->header_done = owt_header_done;

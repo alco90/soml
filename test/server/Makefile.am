@@ -3,7 +3,7 @@ AM_TESTS_ENVIRONMENT = CK_VERBOSITY=verbose MALLOC_CHECK_=3
 
 if HAVE_CHECK
 TESTS = check_server
-if HAVE_RUBY_MIN_1_8_7
+if HAVE_RUBY_MIN_1_9_2
 TESTS += msggen.rb
 endif
 

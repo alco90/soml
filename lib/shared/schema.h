@@ -34,6 +34,9 @@ struct schema_field
   char *name;
   /** Type of the field */
   OmlValueT type;
+  /** Concepts of the field */
+  OMLSemDef *concepts;
+  int nconcepts;
 };
 
 /** Represent the fields of a schema */

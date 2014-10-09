@@ -18,22 +18,24 @@
 #include "oml2/oml_writer.h"
 #include "mbuf.h"
 
-BufferedWriter* bw_create(OmlOutStream* outStream, long queueCapacity, long chainSize);
+typedef void* BufferedWriterHdl;
 
-void bw_close(BufferedWriter* instance);
+BufferedWriterHdl bw_create(OmlOutStream* outStream, long queueCapacity, long chainSize);
 
-int bw_push(BufferedWriter* instance, uint8_t* data, size_t size);
-int _bw_push(BufferedWriter* instance, uint8_t* data, size_t size);
-int bw_push_meta(BufferedWriter* instance, uint8_t* data, size_t size);
-int _bw_push_meta(BufferedWriter* instance, uint8_t* data, size_t size);
+void bw_close(BufferedWriterHdl instance);
 
-int bw_msgcount_add(BufferedWriter* instance, int nmessages);
-int bw_msgcount_reset(BufferedWriter* instance);
-int bw_nlost_reset(BufferedWriter* instance);
+int bw_push(BufferedWriterHdl instance, uint8_t* data, size_t size);
+int _bw_push(BufferedWriterHdl instance, uint8_t* data, size_t size);
+int bw_push_meta(BufferedWriterHdl instance, uint8_t* data, size_t size);
+int _bw_push_meta(BufferedWriterHdl instance, uint8_t* data, size_t size);
 
-MBuffer* bw_get_write_buf(BufferedWriter* instance, int exclusive);
+int bw_msgcount_add(BufferedWriterHdl instance, int nmessages);
+int bw_msgcount_reset(BufferedWriterHdl instance);
+int bw_nlost_reset(BufferedWriterHdl instance);
 
-void bw_unlock_buf(BufferedWriter* instance);
+MBuffer* bw_get_write_buf(BufferedWriterHdl instance, int exclusive);
+
+void bw_unlock_buf(BufferedWriterHdl instance);
 
 #endif // OML_BUFFERED_WRITER_H_
 

@@ -42,22 +42,21 @@ OmlClient* omlc_instance = NULL;
 #define DEF_LOG_LEVEL = O_LOG_INFO;
 
 static OmlMPDef _experiment_metadata[] = {
-  {"subject", OML_STRING_VALUE},
-  {"key", OML_STRING_VALUE},
-  {"value", OML_STRING_VALUE},
-  {NULL, (OmlValueT)0}
+  {"subject", OML_STRING_VALUE, NULL},
+  {"key", OML_STRING_VALUE, NULL},
+  {"value", OML_STRING_VALUE, NULL},
+  {NULL, (OmlValueT)0, NULL}
 };
 OmlMP *schema0;
 
 static OmlMPDef _client_instrumentation[] = {
-  /* some sequence stuff to spot missing readings */
-  {"measurements_injected", OML_UINT32_VALUE },
-  {"measurements_dropped", OML_UINT32_VALUE },
-  {"bytes_allocated", OML_UINT64_VALUE },
-  {"bytes_freed", OML_UINT64_VALUE },
-  {"bytes_in_use", OML_UINT64_VALUE },
-  {"bytes_max", OML_UINT64_VALUE },
-  {NULL, (OmlValueT)0}
+  {"measurements_injected", OML_UINT32_VALUE, NULL},
+  {"measurements_dropped", OML_UINT32_VALUE, NULL},
+  {"bytes_allocated", OML_UINT64_VALUE, NULL},
+  {"bytes_freed", OML_UINT64_VALUE, NULL},
+  {"bytes_in_use", OML_UINT64_VALUE, NULL},
+  {"bytes_max", OML_UINT64_VALUE, NULL},
+  {NULL, (OmlValueT)0, NULL}
 };
 
 /** A function pointer suitable for sigaction(3) */
@@ -258,7 +257,7 @@ omlc_init(const char* application, int* pargc, const char** argv, o_log_fn custo
   if (domain == NULL) {
     if(!(domain = getenv("OML_DOMAIN"))) {
       if ((domain= getenv("OML_EXP_ID"))) {
-        logwarn("Environment variable OML_EXP_ID is getting deprecated; please use 'OML_DOMAIN=\"%s\"' instead\n",
+        logwarn("Enviromnent variable OML_EXP_ID is getting deprecated; please use 'OML_DOMAIN=\"%s\"' instead\n",
             domain);
       }
     }
@@ -269,7 +268,7 @@ omlc_init(const char* application, int* pargc, const char** argv, o_log_fn custo
   if (local_data_file == NULL && collection_uri == NULL) {
     if(!(collection_uri = getenv("OML_COLLECT"))) {
       if ((collection_uri = getenv("OML_SERVER"))) {
-        logwarn("Environment variable OML_SERVER is getting deprecated; please use 'OML_COLLECT=\"%s\"' instead\n",
+        logwarn("Enviromnent variable OML_SERVER is getting deprecated; please use 'OML_COLLECT=\"%s\"' instead\n",
             collection_uri);
       }
     }
@@ -318,6 +317,21 @@ omlc_init(const char* application, int* pargc, const char** argv, o_log_fn custo
   return 0;
 }
 
+OMLSemDef *
+destroy_sem_concepts(OMLSemDef *sd)
+{
+    OMLSemDef *sd_aux = NULL;
+    if (sd)
+    {
+        if (sd->subject) oml_free(sd->subject);
+        if (sd->verb) oml_free(sd->verb);
+        if (sd->predicate) oml_free(sd->predicate);
+        sd_aux = sd->next;
+        oml_free(sd);
+    }
+    return sd_aux;
+}
+
 /** Register a measurement point.
  *
  * This function should be called after omlc_init() and before omlc_start().
@@ -334,12 +348,12 @@ omlc_init(const char* application, int* pargc, const char** argv, o_log_fn custo
  * \code {.c}
  *   OmlMPDef mp_def[] =
  *   {
- *     { "source", OML_UINT32_VALUE },
- *     { "destination", OML_UINT32_VALUE },
- *     { "length", OML_UINT32_VALUE },
- *     { "weight", OML_DOUBLE_VALUE },
- *     { "protocol", OML_STRING_VALUE },
- *     { NULL, (OmlValueT)0 }
+ *     { "source", OML_UINT32_VALUE, NULL},
+ *     { "destination", OML_UINT32_VALUE, NULL},
+ *     { "length", OML_UINT32_VALUE, NULL},
+ *     { "weight", OML_DOUBLE_VALUE, NULL},
+ *     { "protocol", OML_STRING_VALUE, NULL},
+ *     { NULL, (OmlValueT)0, NULL }
  *   };
  * \endcode
  *
@@ -381,6 +395,7 @@ omlc_add_mp (const char* mp_name, OmlMPDef* mp_def)
     if (!validate_name (dp->name)) {
       logerror("Illegal field name '%s' in MP %s: missing or containing whitespaces or dashes; MP will not be created\n",
           dp->name, mp_name);
+      while (destroy_sem_concepts(mp->param_defs->relations));
       oml_free (mp);
       return NULL;
     }
@@ -435,6 +450,35 @@ omlc_add_mp (const char* mp_name, OmlMPDef* mp_def)
   return mp;
 }
 
+/** Asign all concepts to the measurement Point
+ * 
+ * \param concepts matrix of concepts
+ * \param n number of triples
+ * \return OMLSemDef* (can be NULL)
+ * \author Mario Poyato Pino <mario.poyato@uam.es>
+ */
+OMLSemDef *
+oml_sem_register_concepts(char***concepts, int n)
+{
+  int i=0;
+  OMLSemDef *sd=NULL,*sd_last,*sd_aux;
+  if (n>0) {
+    sd = sd_last = sd_aux = (OMLSemDef*)oml_malloc(sizeof(OMLSemDef));
+    while (i<n) {
+      sd_aux->subject   = xstrdup(concepts[i][0]);
+      sd_aux->verb      = xstrdup(concepts[i][1]);
+      sd_aux->predicate = xstrdup(concepts[i][2]);
+      sd_aux->next      = NULL;
+      if (++i<n) {
+        sd_aux = (OMLSemDef*)oml_malloc(sizeof(OMLSemDef));
+        sd_last->next = sd_aux;
+        sd_last=sd_aux;
+      }
+    }
+  }
+  return sd;
+}
+
 /** Destroy MP
  *
  * This function is designed so it can be used in a while loop to clean up the
@@ -462,6 +506,7 @@ destroy_mp(OmlMP *mp)
   if (!mp_lock(mp)) {
     mp->active = 0;
     ms = mp->streams;
+    while (destroy_sem_concepts(mp->param_defs->relations));
     while( (ms=destroy_ms(ms)) );
     mp_unlock(mp);
   }
@@ -698,7 +743,7 @@ create_writer(const char* uri, enum StreamEncoding encoding)
   OmlURIType uri_type = oml_uri_type(uri);
 
   if (omlc_instance == NULL){
-    logerror("No omlc_instance: OML client was not initialized properly.\n");
+    logerror("No omlc_instance:  OML client was not initialized properly.\n");
     return NULL;
   }
 
@@ -1180,6 +1225,7 @@ create_default_filter(OmlMPDef *def, OmlMStream *ms, int index)
 {
   const char* name = def->name;
   OmlValueT type = def->param_types;
+  OMLSemDef * concepts = def->relations;
   int multiple_samples = ms->sample_thres > 1 || ms->sample_interval > 0;
 
   char* fname;
@@ -1188,8 +1234,30 @@ create_default_filter(OmlMPDef *def, OmlMStream *ms, int index)
   } else {
     fname = "first";
   }
-  OmlFilter* f = create_filter(fname, name, type, index);
+  OmlFilter* f = create_filter(fname, name, type, concepts, index);
   return f;
+}
+
+/** Generate the schema string describing an OMLSemDef
+ * 
+ * \param mpdef OmlMPDef to extract concepts
+ * \return 
+ */
+static char*
+sem_from_mpdef(OMLSemDef *dp)
+{
+  char *schema_str = NULL;
+  MString *schema_mstr;
+  if (dp) {
+    schema_mstr = mstring_create();
+    while (dp != NULL) {
+      mstring_sprintf(schema_mstr, "{%s|%s|%s}", dp->subject,dp->verb,dp->predicate);
+      dp=dp->next;
+    }
+    schema_str = xstrdup(mstring_buf(schema_mstr));
+    mstring_delete(schema_mstr);
+  }
+  return schema_str;
 }
 
 /** Generate the schema string describing an OmlMPDef
@@ -1204,6 +1272,7 @@ create_default_filter(OmlMPDef *def, OmlMStream *ms, int index)
 static char*
 schemastr_from_mpdef(OmlMPDef *mpdef)
 {
+  OMLSemDef*sp;
   char *schema_str;
   MString *schema_mstr;
   OmlMPDef *dp = mpdef;
@@ -1214,8 +1283,26 @@ schemastr_from_mpdef(OmlMPDef *mpdef)
   schema_mstr = mstring_create();
 
   while (dp != NULL && dp->name != NULL) {
-    mstring_sprintf(schema_mstr, " %s:%s", dp->name,
-        oml_type_to_s(dp->param_types));
+    if (dp->relations)
+    {
+        sp=sem_from_mpdef(dp->relations);
+        if (sp)
+        {
+            mstring_sprintf(schema_mstr, " %s:%s:%s", dp->name,
+                oml_type_to_s(dp->param_types),sp);
+            oml_free(sp);
+        }
+        else
+        {
+            mstring_sprintf(schema_mstr, " %s:%s", dp->name,
+                oml_type_to_s(dp->param_types));
+        }
+    }
+    else
+    {
+        mstring_sprintf(schema_mstr, " %s:%s:", dp->name,
+            oml_type_to_s(dp->param_types));
+    }
     dp++;
   }
 
@@ -1286,6 +1373,7 @@ write_schema(OmlMStream *ms, int index)
   size_t count = 0;
   size_t n = 0;
   int i;
+  OMLSemDef* concepts;
 
   ms->index = index;
   n = snprintf(s, bufsize, "schema: %d %s ", ms->index, ms->table_name);
@@ -1307,12 +1395,23 @@ write_schema(OmlMStream *ms, int index)
     for (j = 0; j < filter->output_count; j++) {
       char* name;
       OmlValueT type;
-      if (filter->meta(filter, j, &name, &type) != -1) {
+      if (filter->meta(filter, j, &name, &type, &concepts) != -1) {
         const char *type_s = oml_type_to_s(type);
-        if (name == NULL) {
-          n = snprintf(s, bufsize, "%s:%s ", prefix, type_s);
-        } else {
-          n = snprintf(s, bufsize, "%s_%s:%s ", prefix, name, type_s);
+        char *c = sem_from_mpdef(concepts);
+        if (c)
+        {
+          if (name == NULL)
+            n = snprintf(s, bufsize, "%s:%s:%s ", prefix, type_s, c);
+          else
+            n = snprintf(s, bufsize, "%s_%s:%s:%s ", prefix, name, type_s, c);
+          oml_free(c);
+        }
+        else
+        {
+            if (name == NULL)
+              n = snprintf(s, bufsize, "%s:%s ", prefix, type_s);
+            else
+              n = snprintf(s, bufsize, "%s_%s:%s ", prefix, name, type_s);
         }
 
         if (n >= bufsize) {

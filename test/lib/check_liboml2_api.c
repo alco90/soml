@@ -114,8 +114,8 @@ START_TEST (test_api_name_spaces)
 {
   OmlMPDef def [] =
     {
-      { "field1", OML_INT32_VALUE },
-      { NULL, (OmlValueT)0 }
+      { "field1", OML_INT32_VALUE, NULL },
+      { NULL, (OmlValueT)0, NULL }
     };
 
   OmlClient dummy;
@@ -135,8 +135,8 @@ START_TEST (test_api_name_spaces)
 END_TEST
 
 OmlMPDef mpdef [] = {
-  { "label", OML_STRING_VALUE },
-  { NULL, (OmlValueT)0 }
+  { "label", OML_STRING_VALUE, NULL },
+  { NULL, (OmlValueT)0, NULL }
 };
 OmlMP *mp;
 

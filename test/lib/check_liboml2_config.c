@@ -24,9 +24,9 @@
 
 OmlMPDef mp_def [] =
 {
-  { "f1", OML_UINT32_VALUE },
-  { "f2", OML_UINT32_VALUE },
-  { NULL, (OmlValueT)0 }
+  { "f1", OML_UINT32_VALUE, NULL },
+  { "f2", OML_UINT32_VALUE, NULL },
+  { NULL, (OmlValueT)0, NULL }
 };
 
 

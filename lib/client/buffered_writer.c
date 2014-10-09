@@ -48,7 +48,7 @@ typedef struct BufferChunk {
 } BufferChunk;
 
 /** A writer reading from a chain of BufferChunks */
-struct BufferedWriter {
+typedef struct BufferedWriter {
   /** Set to !0 if buffer is active; 0 kills the thread */
   int  active;
 
@@ -86,7 +86,7 @@ struct BufferedWriter {
 
   int nlost; /**< Number of lost messages since last query */
 
-};
+} BufferedWriter;
 #define REATTEMP_INTERVAL 5    //! Seconds to open the stream again
 
 static BufferChunk* getNextWriteChunk(BufferedWriter* self, BufferChunk* current);
@@ -104,7 +104,7 @@ static int processChunk(BufferedWriter* self, BufferChunk* chunk);
  *
  * \see DEF_CHAIN_BUFFER_SIZE
  */
-BufferedWriter*
+BufferedWriterHdl
 bw_create(OmlOutStream* outStream, long  queueCapacity, long chunkSize)
 {
   long nchunks;
@@ -154,7 +154,7 @@ bw_create(OmlOutStream* outStream, long  queueCapacity, long chunkSize)
     }
   }
 
-  return (BufferedWriter*)self;
+  return (BufferedWriterHdl)self;
 }
 
 /** Close an output stream and destroy the objects.
@@ -162,7 +162,7 @@ bw_create(OmlOutStream* outStream, long  queueCapacity, long chunkSize)
  * \param instance handle (i.e., pointer) to a BufferedWriter
  */
 void
-bw_close(BufferedWriter* instance)
+bw_close(BufferedWriterHdl instance)
 {
   int *retval;
   BufferedWriter *self = (BufferedWriter*)instance;
@@ -208,7 +208,7 @@ bw_close(BufferedWriter* instance)
  * \see _bw_push
  */
 int
-bw_push(BufferedWriter* instance, uint8_t *data, size_t size)
+bw_push(BufferedWriterHdl instance, uint8_t *data, size_t size)
 {
   int result = 0;
   BufferedWriter* self = (BufferedWriter*)instance;
@@ -229,7 +229,7 @@ bw_push(BufferedWriter* instance, uint8_t *data, size_t size)
  * \see bw_push
  */
 int
-_bw_push(BufferedWriter* instance, uint8_t* data, size_t size)
+_bw_push(BufferedWriterHdl instance, uint8_t* data, size_t size)
 {
   BufferedWriter* self = (BufferedWriter*)instance;
   if (!self->active) { return 0; }
@@ -263,7 +263,7 @@ _bw_push(BufferedWriter* instance, uint8_t* data, size_t size)
  * \see _bw_push_meta
  */
 int
-bw_push_meta(BufferedWriter* instance, uint8_t* data, size_t size)
+bw_push_meta(BufferedWriterHdl instance, uint8_t* data, size_t size)
 {
   int result = 0;
   BufferedWriter* self = (BufferedWriter*)instance;
@@ -285,7 +285,7 @@ bw_push_meta(BufferedWriter* instance, uint8_t* data, size_t size)
  *
  */
 int
-_bw_push_meta(BufferedWriter* instance, uint8_t* data, size_t size)
+_bw_push_meta(BufferedWriterHdl instance, uint8_t* data, size_t size)
 {
   BufferedWriter* self = (BufferedWriter*)instance;
   int result = 0;
@@ -313,9 +313,10 @@ _bw_push_meta(BufferedWriter* instance, uint8_t* data, size_t size)
  * \see bw_msgcount_reset, bw_nlost_reset
  */
 int
-bw_msgcount_add(BufferedWriter* instance, int nmessages) {
-  instance->writerChunk->nmessages += 1;
-  return instance->writerChunk->nmessages;
+bw_msgcount_add(BufferedWriterHdl instance, int nmessages) {
+  BufferedWriter* self = (BufferedWriter*)instance;
+  self->writerChunk->nmessages += 1;
+  return self->writerChunk->nmessages;
 }
 
 /** Reset the message count in the current BufferChunk and return its previous value.
@@ -327,9 +328,10 @@ bw_msgcount_add(BufferedWriter* instance, int nmessages) {
  * \see bw_msgcount_add, bw_nlost_reset
  */
 int
-bw_msgcount_reset(BufferedWriter* instance) {
-  int n = instance->writerChunk->nmessages;
-  instance->writerChunk->nmessages = 0;
+bw_msgcount_reset(BufferedWriterHdl instance) {
+  BufferedWriter* self = (BufferedWriter*)instance;
+  int n = self->writerChunk->nmessages;
+  self->writerChunk->nmessages = 0;
   return n;
 }
 
@@ -342,9 +344,10 @@ bw_msgcount_reset(BufferedWriter* instance) {
  * \see bw_msgcount_add, bw_msgcount_reset
  */
 int
-bw_nlost_reset(BufferedWriter* instance) {
-  int n = instance->nlost;
-  instance->nlost = 0;
+bw_nlost_reset(BufferedWriterHdl instance) {
+  BufferedWriter* self = (BufferedWriter*)instance;
+  int n = self->nlost;
+  self->nlost = 0;
   return n;
 }
 /** Return an MBuffer with (optional) exclusive write access
@@ -359,7 +362,7 @@ bw_nlost_reset(BufferedWriter* instance) {
  * \see bw_unlock_buf
  */
 MBuffer*
-bw_get_write_buf(BufferedWriter* instance, int exclusive)
+bw_get_write_buf(BufferedWriterHdl instance, int exclusive)
 {
   BufferedWriter* self = (BufferedWriter*)instance;
   if (oml_lock(&self->lock, __FUNCTION__)) { return 0; }
@@ -386,14 +389,14 @@ bw_get_write_buf(BufferedWriter* instance, int exclusive)
  * \see bw_get_write_buf
  */
 void
-bw_unlock_buf(BufferedWriter* instance)
+bw_unlock_buf(BufferedWriterHdl instance)
 {
   BufferedWriter* self = (BufferedWriter*)instance;
   pthread_cond_signal(&self->semaphore); /* assume we locked for a reason */
   oml_unlock(&self->lock, __FUNCTION__);
 }
 
-/** Find the next empty write chunk, sets self->writerChunk to it and returns it.
+/** Find the next empty write chunk, sets self->writeChunk to it and returns it.
  *
  * We only use the next one if it is empty. If not, we essentially just filled
  * up the last chunk and wrapped around to the socket reader. In that case, we
@@ -401,7 +404,7 @@ bw_unlock_buf(BufferedWriter* instance)
  * the data from the current one.
  *
  * This assumes that the current thread holds the self->lock and the lock on
- * the self->writerChunk.
+ * the self->writeChunk.
  *
  * \param self BufferedWriter pointer
  * \param current BufferChunk to use or from which to find the next

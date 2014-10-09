@@ -39,6 +39,7 @@ create_filter(
     const char* filter_type,
     const char* instance_name,
     OmlValueT   type,
+    OMLSemDef *concepts,
     int         index
 );
 

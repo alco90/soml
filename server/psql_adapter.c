@@ -90,6 +90,8 @@ static char* psql_get_sender_id (Database* database, const char* name);
 static int psql_set_sender_id (Database* database, const char* name, int id);
 static void psql_receive_notice(void *arg, const PGresult *res);
 
+MString* psql_prepare (Database *db, DbTable* table);
+
 /** Prepare the conninfo string to connect to the Postgresql server.
  *
  * \param host server hostname
@@ -320,6 +322,7 @@ psql_create_database(Database* db)
   db->table_create = psql_table_create;
   db->table_create_meta = dba_table_create_meta;
   db->table_free = psql_table_free;
+  db->prepare = psql_prepare;
   db->insert = psql_insert;
   db->add_sender_id = psql_add_sender_id;
   db->get_metadata = psql_get_metadata;
@@ -501,6 +504,75 @@ psql_prepared_var(Database *db, unsigned int order)
  */
 #define MAX_DIGITS 32
 
+/** Prepare an INSERT statement for a given table
+ *
+ * The returned value is to be destroyed by the caller.
+ *
+ * \param db Database
+ * \param table DbTable adapter for the target SQLite3 table
+ * \return an MString containing the prepared statement, or NULL on error
+ *
+ * \see mstring_create, mstring_delete
+ */
+MString*
+psql_prepare (Database *db, DbTable* table)
+{
+  MString* mstr = mstring_create ();
+  int n = 0, i = 0;
+  int max = table->schema->nfields;
+  char *pvar;
+
+  if (max <= 0) {
+    logerror ("%d: Trying to insert 0 values into table %s\n",
+        db->backend_name, table->schema->name);
+    goto fail_exit;
+  }
+
+  if (mstr == NULL) {
+    logerror("%d: Failed to create managed string for preparing SQL INSERT statement\n",
+        db->backend_name);
+    goto fail_exit;
+  }
+  
+  /* Build SQL "INSERT INTO" statement */
+    n += mstring_sprintf (mstr,
+        "INSERT INTO \"%s\" (\"oml_sender_id\", \"oml_seq\", \"oml_ts_client\", \"oml_ts_server\"",
+        table->schema->name);
+
+    /* Add specific column names */
+    for (i=0; i<max; i++) {
+      n += mstring_sprintf (mstr, ", \"%s\"", table->schema->fields[i].name);
+    }
+
+    /* Close column names, and add variables for the prepared statement */
+    pvar = db->prepared_var(db, 1);
+    n += mstring_sprintf (mstr, ") VALUES (%s", pvar);
+    oml_free(pvar); /* XXX: Not really efficient, but we only do this rarely */
+
+    max += 4; /* Number of metadata columns we want to be able to insert */
+    for (i=2; i<=max; i++) {
+      pvar = db->prepared_var(db, i);
+      n += mstring_sprintf (mstr, ", %s", pvar);
+      oml_free(pvar);
+    }
+
+    /* We're done */
+    n += mstring_cat (mstr, ");");
+
+    logdebug2("%s:%s: Prepared insert statement for table %s: %s\n",
+      db->backend_name, db->name, table->schema->name, mstring_buf(mstr));
+
+  if (n != 0) {
+    /* mstring_* return -1 on error, with no error, the sum in n should be 0 */
+    goto fail_exit;
+  }
+  return mstr;
+
+ fail_exit:
+  if (mstr) mstring_delete (mstr);
+  return NULL;
+}
+
 /** Insert value in the PostgreSQL database.
  * \see db_adapter_insert
  */
@@ -514,8 +586,7 @@ psql_insert(Database* db, DbTable* table, int sender_id, int seq_no, double time
   double time_stamp_server;
   const char* insert_stmt = mstring_buf (psqltable->insert_stmt);
   unsigned char *escaped_blob;
-  size_t len; /* Will raise warning if we use it in some codepaths where it risk not being initialised;
-		 It's a Good Thing(TM) */
+  size_t len=MAX_DIGITS;
 
   char *paramValues[4+value_count];
   for (i=0;i<4+value_count;i++) {
@@ -569,7 +640,7 @@ psql_insert(Database* db, DbTable* table, int sender_id, int seq_no, double time
     case OML_DOUBLE_VALUE: snprintf(paramValues[4+i], MAX_DIGITS, "%.14e",omlc_get_double(*oml_value_get_value(v))); break;
     case OML_BOOL_VALUE:   snprintf(paramValues[4+i], MAX_DIGITS, "%d", omlc_get_bool(*oml_value_get_value(v)) ? 1 : 0); break;
     case OML_STRING_VALUE:
-			   len = omlc_get_string_length(*oml_value_get_value(v)) + 1;
+			   len=omlc_get_string_length(*oml_value_get_value(v)) + 1;
 			   if (len > MAX_DIGITS) {
                              logdebug2("psql:%s: Reallocating %d bytes for long string\n", db->name, len);
 			     paramValues[4+i] = oml_realloc(paramValues[4+i], len);

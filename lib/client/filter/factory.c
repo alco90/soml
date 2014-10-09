@@ -92,6 +92,7 @@ create_filter(
     const char* filter_type,
     const char* instance_name,
     OmlValueT   type,
+    OMLSemDef *concepts,
     int         index
 ) {
   FilterType* ft = filter_types;
@@ -110,6 +111,7 @@ create_filter(
   if (f->name[sizeof(f->name)-1] != '\0')
     f->name[sizeof(f->name)-1] = '\0';
   f->index = index;
+  f->concepts = concepts;
   f->set = ft->set;
   f->input_type = type;
   f->input = ft->input;
@@ -170,7 +172,8 @@ static int
 default_filter_meta (OmlFilter* filter,
              int index_offset,
              char** name_ptr,
-             OmlValueT* type_ptr)
+             OmlValueT* type_ptr,
+             OMLSemDef* concepts_ptr)
 {
   if (!filter || (index_offset < 0) || (index_offset >= filter->output_count))
     return -1;
@@ -186,6 +189,8 @@ default_filter_meta (OmlFilter* filter,
 
     *type_ptr = type;
   }
+  if (concepts_ptr)
+    concepts_ptr = filter->concepts;
   return 0;
 }
 

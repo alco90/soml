@@ -362,10 +362,12 @@ read_mp_def (FILE *fp, int *mp_length)
     {
       def[i].name = elt->def.name;
       def[i].param_types = elt->def.param_types;
+      def[i].relations = NULL;
     }
 
   def[elt_count].name = NULL;
   def[elt_count].param_types = 0;
+  def[elt_count].relations = NULL;
 
   *mp_length = elt_count;
   return def;

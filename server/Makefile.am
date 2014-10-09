@@ -64,6 +64,11 @@ oml2_server_SOURCES += psql_adapter.c psql_adapter.h
 oml2_server_LDFLAGS = $(PQLIBPATH)
 endif
 
+if HAVE_SEMANTIC
+oml2_server_SOURCES += fuseki_adapter.c fuseki_adapter.h virtuoso_adapter.c virtuoso_adapter.h
+oml2_server_LDFLAGS = -L/usr/include/curl/lib -lcurl
+endif
+
 oml2_server_CPPFLAGS = $(PQINCPATH) $(AM_CPPFLAGS)
 
 oml2_server_LDADD = \
@@ -73,7 +78,7 @@ oml2_server_LDADD = \
 	$(M_LIBS) $(POPT_LIBS) $(SQLITE3_LIBS) $(LIBPQ_LIBS)
 
 oml2-server_oml.h: oml2-server.rb
-	$(SCAFFOLD) --oml $<
+	$(SCAFFOLD) --oml $< --ontology ../ruby/etsi-ontology/
 
 oml2-server.rb: oml2-server.rb.in
 	VER=`echo $(VERSION) | $(SED) "s/.*+oml//;s/-dirty//;s/\([0-9]\{1,\}\(\.[0-9]\{1,\}\)\{1,2\}\).*/\1/;s/\./, /g"`; \

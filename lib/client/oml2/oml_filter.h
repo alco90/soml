@@ -83,10 +83,11 @@ typedef int (*oml_filter_newwindow)(struct OmlFilter* filter);
  * \param index_offset index in result array to query for meta information
  * \param[out] namePtr name of the output value at index index_offset (XXX: must be statically allocated)
  * \param[out] type OmlTypeT of the output value at index index_offset
+ * \param[out] semantic definition of the filter
  * \return 0 on success, -1 otherwise
  * \see omlf_register_filter, OmlFilterDef
  */
-typedef int (*oml_filter_meta)(struct OmlFilter* filter, int index_offset, char** namePtr, OmlValueT* type);
+typedef int (*oml_filter_meta)(struct OmlFilter* filter, int index_offset, char** namePtr, OmlValueT* type, OMLSemDef * concepts);
 
 /** Definition of a filter's output element. */
 typedef struct OmlFilterDef {
@@ -135,6 +136,8 @@ typedef struct OmlFilter {
 
   /** Array of results where the filter is expected to write its ouput, allocated by the factory */
   OmlValue *result;
+  
+  OMLSemDef *concepts;
 
   /** Filters are stored in a linked list for a given MP */
   struct OmlFilter* next;

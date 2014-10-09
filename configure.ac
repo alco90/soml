@@ -142,6 +142,11 @@ AC_SEARCH_LIBS([sqlite3_open], [sqlite3 sqlite], [
 	       ], [missing_libs+=" libsqlite3"])
 LIBS=$oldLIBS
 
+# Detect if semantic is around
+oldLIBS=$LIBS
+AM_CONDITIONAL(HAVE_SEMANTIC, true)
+AC_DEFINE([HAVE_LIBSEM], [1], [Define if libsemantic is installed.])
+LIBS=$oldLIBS
 
 # Detect if PostgreSQL is around, but don't add it to the default
 oldLIBS=$LIBS
@@ -282,18 +287,18 @@ AX_WITH_PROG([PYTHON],[python],[missing_python="yes"])
 AM_CONDITIONAL([HAVE_PYTHON], [test x"${missing_python}" != xyes])
 
 AX_WITH_PROG([RUBY],[ruby])
-AX_PROG_RUBY_VERSION([1.8.7],
+AX_PROG_RUBY_VERSION([1.9.2],
 		     [
-		      missing_rubyge187=no
+		      missing_rubyge192=no
 		     ],
 		     [
 		      AC_MSG_WARN([No Ruby>=1.8.7 found; some tests will be skipped])
-		      missing_rubyge187=yes
+		      missing_rubyge192=yes
 		      AS_IF([test "x$enable_android" = "xyes"],
 			    [AC_MSG_WARN([The Android source package will not contain a working example-oml2, please do not distribute it])])
 		     ]
 		    )
-AM_CONDITIONAL([HAVE_RUBY_MIN_1_8_7], [test x"${missing_rubyge187}" != xyes])
+AM_CONDITIONAL([HAVE_RUBY_MIN_1_9_2], [test x"${missing_rubyge192}" != xyes])
 
 missing_check=""
 PKG_CHECK_MODULES([CHECK], [check >= 0.9.4], [], [missing_check="yes"])

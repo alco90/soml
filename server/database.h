@@ -113,6 +113,8 @@ typedef int (*db_adapter_table_free)(Database *db, DbTable *table);
  */
 typedef char* (*db_adapter_prepared_var)(Database *db, unsigned int order);
 
+typedef MString* (*db_adapter_prepare)(Database *db, DbTable* table);
+
 /** Insert value in the a table of a database
  *
  * \param db Database to write in
@@ -206,6 +208,9 @@ struct Database{
   time_t     start_time;
   /** Opaque pointer to database implementation handle */
   void*      handle;
+  
+  /** Flag that indicates if the database is semantic or not */
+  char       semantic;
 
   /** Pointer to OML-to-native type conversion function */
   db_adapter_oml_to_type o2t;
@@ -223,6 +228,8 @@ struct Database{
   db_adapter_table_create_meta table_create_meta;
   /** Pointer to function to free a table \see db_adapter_table_free */
   db_adapter_table_free table_free;
+  /** Pointer to function generating the prepared statement \see db_adapter_prepare */
+  db_adapter_prepare prepare;
   /** Pointer to function generating variable names for prepared statements \see db_adapter_prepared_var */
   db_adapter_prepared_var prepared_var;
   /** Pointer to function to insert data in a table \see db_adapter_insert */
